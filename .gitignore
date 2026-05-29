@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# agent state (local only)
+/.omc/
+/.claude/
+
+# local verification screenshots / scratch
+/*.png
+
+# sqlite databases (e.g. seeded kanban.db)
+*.db
+*.db-wal
+*.db-shm

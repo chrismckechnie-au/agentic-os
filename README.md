@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agentic OS
 
-## Getting Started
+Unified dashboard for AI agents (**Claude Code**, **Codex**, **Hermes**, **Obsidian**), plus
+**Repositories** and an **Overview** health page. Visual prototype on mock data, architected to wire
+to real sources later.
 
-First, run the development server:
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Scripts: `npm run dev` · `npm run build` · `npm start` · `npm run lint`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Pages
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Route               | What                                                                 |
+| ------------------- | -------------------------------------------------------------------- |
+| `/`                 | Overview — stat cards, agent status, recent sessions, system health  |
+| `/agents/claude-code` | Claude Code — sessions, live terminal, session details + commits   |
+| `/agents/codex`     | Codex — plan, changed files, tests, task details                     |
+| `/agents/hermes`    | Hermes — terminal, memory stores, skills, jobs                       |
+| `/agents/obsidian`  | Obsidian — note viewer, graph, vault                                 |
+| `/repos`            | Repositories (GitHub-shaped)                                         |
+| `/workspaces` `/sessions` `/logs` `/settings` | supporting pages                          |
 
-## Learn More
+## Architecture — wiring to real data later
 
-To learn more about Next.js, take a look at the following resources:
+The UI never touches a data source directly. Everything flows through one seam:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+Server Components / API routes ──▶ getProvider() ──▶ MockProvider (now)
+                                                  └─▶ Live providers (later)
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `src/lib/types.ts` — domain types
+- `src/lib/providers/types.ts` — the `DataProvider` interface (the contract)
+- `src/lib/providers/mock/` — fixtures + `MockProvider` (current `DATA_SOURCE=mock`)
+- `src/lib/providers/live/` — stubs mapping each source to where it really lives on the Ubuntu host
+  (`~/.claude`, `~/.codex`, `~/.hermes`, the Obsidian vault, the GitHub API)
+- `src/lib/providers/index.ts` — factory that picks the provider from `DATA_SOURCE`
 
-## Deploy on Vercel
+**To go live:** implement the providers in `src/lib/providers/live/`, compose them in `index.ts`
+under `case "live"`, then run with `DATA_SOURCE=live`. No UI or route changes. All filesystem /
+process / network access stays server-side (guarded by `import "server-only"`).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Stack
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · lucide-react. Custom dark theme
+with a per-agent `--accent` CSS variable; sparklines are inline SVG (no chart lib).

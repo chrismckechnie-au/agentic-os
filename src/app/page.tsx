@@ -1,65 +1,108 @@
-import Image from "next/image";
+import Link from "next/link";
+import { getProvider } from "@/lib/providers";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { AgentCard } from "@/components/dashboard/agent-card";
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import { HealthList } from "@/components/dashboard/health-list";
+import { SessionsTable } from "@/components/dashboard/sessions-table";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Icon } from "@/components/icon";
 
-export default function Home() {
+export default async function OverviewPage() {
+  const data = await getProvider().getOverview();
+  const featured = data.agents.filter((a) => a.status === "running").slice(0, 2);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <PageHeader
+        title="Overview"
+        subtitle="Monitor agents, sessions, and system health at a glance."
+        icon="LayoutGrid"
+      />
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        {data.stats.map((s) => (
+          <StatCard key={s.id} stat={s} />
+        ))}
+      </div>
+
+      {/* Agent overview + recent activity */}
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <h2 className="mb-3 text-sm font-semibold text-muted">Agent Overview</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {featured.map((a) => (
+              <AgentCard key={a.id} agent={a} />
+            ))}
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+            <Link href="/logs" className="text-xs text-[var(--accent)] hover:underline">
+              View all
+            </Link>
+          </CardHeader>
+          <CardBody className="pt-0">
+            <ActivityFeed items={data.activity} />
+          </CardBody>
+        </Card>
+      </div>
+
+      {/* Recent sessions + system status + workspaces */}
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Recent Sessions</CardTitle>
+            <Link href="/sessions" className="flex items-center gap-1 text-xs text-[var(--accent)] hover:underline">
+              View all sessions <Icon name="ArrowRight" size={13} />
+            </Link>
+          </CardHeader>
+          <CardBody className="px-0 pb-0">
+            <SessionsTable sessions={data.recentSessions} />
+          </CardBody>
+        </Card>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>System Status</CardTitle>
+              <span className="flex items-center gap-1.5 text-xs text-ok">
+                <span className="size-1.5 rounded-full bg-ok" /> Operational
+              </span>
+            </CardHeader>
+            <CardBody className="pt-0">
+              <HealthList items={data.health.slice(0, 5)} />
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Workspaces</CardTitle>
+              <Link href="/workspaces" className="text-xs text-[var(--accent)] hover:underline">
+                View all
+              </Link>
+            </CardHeader>
+            <CardBody className="pt-0">
+              <ul className="divide-y divide-line">
+                {data.workspaces.slice(0, 5).map((w) => (
+                  <li key={w.name} className="flex items-center justify-between py-2.5 text-sm">
+                    <span className="flex items-center gap-2.5">
+                      <Icon name="FolderGit2" size={15} className="text-muted" />
+                      <span className="text-ink">{w.name}</span>
+                    </span>
+                    <span className="text-faint">
+                      {w.agents} agent{w.agents === 1 ? "" : "s"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardBody>
+          </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 }

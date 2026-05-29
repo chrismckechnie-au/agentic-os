@@ -1,26 +1,79 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ */
+/* Agentic OS — dark, data-forward dashboard theme                     */
+/* ------------------------------------------------------------------ */
+
+@theme {
+  --color-canvas: #08090c;
+  --color-surface: #0d0f14;
+  --color-surface-2: #14171d;
+  --color-surface-3: #1a1e26;
+  --color-line: #ffffff14;
+  --color-line-strong: #ffffff26;
+  --color-ink: #e8eaef;
+  --color-muted: #99a1ad;
+  --color-faint: #6b7280;
+
+  --color-ok: #34d399;
+  --color-info: #60a5fa;
+  --color-warn: #f59e0b;
+  --color-violet: #a78bfa;
+  --color-danger: #f87171;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-card: 14px;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  /* Default accent (brand / overview). Per-agent pages override --accent. */
+  --accent: #7c6cff;
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 38%, transparent);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-canvas);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(1100px 480px at 78% -8%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
+    var(--color-canvas);
+  background-attachment: fixed;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff1f transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #ffffff1f;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #ffffff33;
+}
+
+/* Reusable surface helpers */
+@utility panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+}
+
+@utility accent-chip {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
 }
