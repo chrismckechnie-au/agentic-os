@@ -131,15 +131,21 @@ export function Sidebar() {
       {/* Footer: plan + collapse */}
       <div className="border-t border-line p-3">
         {!collapsed && (
-          <div className="mb-3 rounded-xl border border-line bg-surface-2 p-3">
-            <div className="flex items-center gap-2 text-xs font-medium">
-              <span className="size-2 rounded-full bg-[var(--accent)]" />
-              Pro Plan
+          <div className="mb-3 rounded-[var(--radius-card)] border border-line p-3" style={{ background: "rgba(20,22,28,0.66)" }}>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-xs font-semibold">
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+                Pro Plan
+              </span>
+              <span className="font-mono text-[11px] text-faint">68%</span>
             </div>
-            <p className="mt-1 text-[11px] text-faint">Usage: 68%</p>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-3">
-              <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: "68%" }} />
+            <div className="mt-2 h-[5px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
+              <div
+                className="h-full rounded-full bg-[var(--accent)] transition-all duration-1000"
+                style={{ width: "68%", boxShadow: "0 0 8px color-mix(in srgb, var(--accent) 55%, transparent)" }}
+              />
             </div>
+            <p className="mt-2 text-[11px] text-faint">1.4M / 2M tokens this month</p>
           </div>
         )}
         <button

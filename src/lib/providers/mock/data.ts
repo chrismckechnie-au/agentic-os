@@ -38,6 +38,9 @@ export const AGENTS_SUMMARY: AgentSummary[] = [
     activeSession: "refuelr-chapter-12",
     currentTask: "Refactoring authentication middleware and improving session handling",
     workspace: "frontend-platform",
+    uptime: "4d 12h",
+    cpu: 34,
+    mem: 58,
   },
   {
     id: "codex",
@@ -48,6 +51,9 @@ export const AGENTS_SUMMARY: AgentSummary[] = [
     activeSession: "feature-auth-flow",
     currentTask: "Implementing rate limiting and updating API endpoints",
     workspace: "api-services",
+    uptime: "2d 03h",
+    cpu: 51,
+    mem: 42,
   },
   {
     id: "hermes",
@@ -58,6 +64,9 @@ export const AGENTS_SUMMARY: AgentSummary[] = [
     activeSession: "hermes-researcher",
     currentTask: "Optimize database query performance",
     workspace: "api-services",
+    uptime: "9d 21h",
+    cpu: 22,
+    mem: 71,
   },
   {
     id: "obsidian",
@@ -68,6 +77,9 @@ export const AGENTS_SUMMARY: AgentSummary[] = [
     activeSession: "refuelr-kb-update",
     currentTask: "Updated 12 notes in knowledge base",
     workspace: "research-assistant",
+    uptime: "12d 06h",
+    cpu: 8,
+    mem: 33,
   },
 ];
 
@@ -83,11 +95,11 @@ export const WORKSPACES: WorkspaceSummary[] = [
 ];
 
 export const HEALTH: HealthItem[] = [
-  { label: "API", status: "healthy" },
-  { label: "Database", status: "healthy" },
-  { label: "Agents", status: "healthy" },
-  { label: "Integrations", status: "healthy" },
-  { label: "Storage", status: "healthy" },
+  { label: "API", status: "healthy", detail: "120ms" },
+  { label: "Database", status: "healthy", detail: "8ms" },
+  { label: "Agents", status: "healthy", detail: "4/4" },
+  { label: "Integrations", status: "healthy", detail: "6 live" },
+  { label: "Storage", status: "healthy", detail: "62%" },
   { label: "MCP Servers", status: "healthy", detail: "8 / 8" },
   { label: "Background Jobs", status: "running", detail: "3 running" },
 ];

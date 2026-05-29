@@ -104,6 +104,9 @@ export interface AgentSummary {
   activeSession?: string;
   currentTask?: string;
   workspace?: string;
+  uptime?: string;
+  cpu?: number;
+  mem?: number;
 }
 
 export interface Repo {

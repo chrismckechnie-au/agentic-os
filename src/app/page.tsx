@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getProvider } from "@/lib/providers";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { AgentCard } from "@/components/dashboard/agent-card";
+import { OrchestrationPanel } from "@/components/dashboard/orchestration-panel";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { HealthList } from "@/components/dashboard/health-list";
 import { SessionsTable } from "@/components/dashboard/sessions-table";
@@ -11,7 +11,6 @@ import { Icon } from "@/components/icon";
 
 export default async function OverviewPage() {
   const data = await getProvider().getOverview();
-  const featured = data.agents.filter((a) => a.status === "running").slice(0, 2);
 
   return (
     <>
@@ -19,69 +18,83 @@ export default async function OverviewPage() {
         title="Overview"
         subtitle="Monitor agents, sessions, and system health at a glance."
         icon="LayoutGrid"
+        right={
+          <div className="flex gap-2">
+            <button
+              className="flex h-[34px] items-center gap-2 rounded-[10px] border px-3 text-sm font-medium transition-colors"
+              style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "var(--color-ink)" }}
+            >
+              <Icon name="RefreshCw" size={14} /> Refresh
+            </button>
+            <button
+              className="flex h-[34px] items-center gap-2 rounded-[10px] px-3 text-sm font-medium text-white transition-colors"
+              style={{ background: "var(--accent)", boxShadow: "0 6px 20px -8px color-mix(in srgb, var(--accent) 70%, transparent)" }}
+            >
+              <Icon name="Plus" size={14} /> New Session
+            </button>
+          </div>
+        }
       />
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      {/* 5-col stat grid */}
+      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-5">
         {data.stats.map((s) => (
           <StatCard key={s.id} stat={s} />
         ))}
       </div>
 
-      {/* Agent overview + recent activity */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <h2 className="mb-3 text-sm font-semibold text-muted">Agent Overview</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {featured.map((a) => (
-              <AgentCard key={a.id} agent={a} />
-            ))}
+      {/* Orchestration + Activity */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
+        <OrchestrationPanel agents={data.agents} />
+
+        <div className="panel">
+          <div className="flex items-center justify-between gap-3 px-5 py-4">
+            <span className="text-sm font-semibold text-ink">Live Activity</span>
+            <Link
+              href="/logs"
+              className="flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline"
+            >
+              View all <Icon name="ArrowRight" size={12} />
+            </Link>
+          </div>
+          <div className="px-5 pb-5 pt-0">
+            <ActivityFeed items={data.activity} />
           </div>
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <Link href="/logs" className="text-xs text-[var(--accent)] hover:underline">
-              View all
-            </Link>
-          </CardHeader>
-          <CardBody className="pt-0">
-            <ActivityFeed items={data.activity} />
-          </CardBody>
-        </Card>
       </div>
 
-      {/* Recent sessions + system status + workspaces */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Recent Sessions</CardTitle>
-            <Link href="/sessions" className="flex items-center gap-1 text-xs text-[var(--accent)] hover:underline">
-              View all sessions <Icon name="ArrowRight" size={13} />
+      {/* Recent Sessions + System Health + Workspaces */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
+        <div className="panel">
+          <div className="flex items-center justify-between gap-3 px-5 py-4">
+            <span className="text-sm font-semibold text-ink">Recent Sessions</span>
+            <Link
+              href="/sessions"
+              className="flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline"
+            >
+              All sessions <Icon name="ArrowRight" size={12} />
             </Link>
-          </CardHeader>
-          <CardBody className="px-0 pb-0">
-            <SessionsTable sessions={data.recentSessions} />
-          </CardBody>
-        </Card>
+          </div>
+          <SessionsTable sessions={data.recentSessions} />
+        </div>
 
-        <div className="space-y-6">
+        <div className="flex flex-col gap-4">
           <Card>
             <CardHeader>
-              <CardTitle>System Status</CardTitle>
-              <span className="flex items-center gap-1.5 text-xs text-ok">
-                <span className="size-1.5 rounded-full bg-ok" /> Operational
+              <CardTitle>System Health</CardTitle>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-ok">
+                <span className="h-1.5 w-1.5 rounded-full bg-ok" /> Operational
               </span>
             </CardHeader>
             <CardBody className="pt-0">
-              <HealthList items={data.health.slice(0, 5)} />
+              <HealthList items={data.health.slice(0, 6)} />
             </CardBody>
           </Card>
 
           <Card>
             <CardHeader>
               <CardTitle>Workspaces</CardTitle>
-              <Link href="/workspaces" className="text-xs text-[var(--accent)] hover:underline">
+              <Link href="/workspaces" className="text-xs font-medium text-[var(--accent)] hover:underline">
                 View all
               </Link>
             </CardHeader>

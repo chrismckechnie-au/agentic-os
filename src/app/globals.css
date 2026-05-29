@@ -1,38 +1,43 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ */
-/* Agentic OS — dark, data-forward dashboard theme                     */
+/* Agentic OS — premium glassmorphic dashboard                         */
 /* ------------------------------------------------------------------ */
 
 @theme {
-  --color-canvas: #08090c;
-  --color-surface: #0d0f14;
-  --color-surface-2: #14171d;
-  --color-surface-3: #1a1e26;
-  --color-line: #ffffff14;
-  --color-line-strong: #ffffff26;
-  --color-ink: #e8eaef;
-  --color-muted: #99a1ad;
-  --color-faint: #6b7280;
+  --color-canvas: #070809;
+  --color-surface: #14161c;
+  --color-surface-solid: #121419;
+  --color-surface-2: rgba(255, 255, 255, 0.04);
+  --color-surface-3: rgba(255, 255, 255, 0.07);
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-strong: rgba(255, 255, 255, 0.16);
+  --color-ink: #edeef2;
+  --color-muted: #9aa1ad;
+  --color-faint: #646b78;
 
   --color-ok: #34d399;
   --color-info: #60a5fa;
   --color-warn: #f59e0b;
   --color-violet: #a78bfa;
   --color-danger: #f87171;
+  --color-cyan: #2dd4bf;
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  --radius-card: 14px;
+  --radius-card: 16px;
+  --radius-sm: 10px;
 }
 
 :root {
   color-scheme: dark;
-  /* Default accent (brand / overview). Per-agent pages override --accent. */
   --accent: #7c6cff;
-  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
-  --accent-line: color-mix(in srgb, var(--accent) 38%, transparent);
+  --accent-soft: color-mix(in srgb, var(--accent) 15%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 36%, transparent);
+  --blur: 18px;
+  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 16px 40px -24px rgba(0, 0, 0, 0.8);
 }
 
 html {
@@ -41,7 +46,16 @@ html {
 
 body {
   background:
-    radial-gradient(1100px 480px at 78% -8%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
+    radial-gradient(
+      1200px 560px at 82% -12%,
+      color-mix(in srgb, var(--accent) 12%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      900px 600px at 8% 110%,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      transparent 60%
+    ),
     var(--color-canvas);
   background-attachment: fixed;
   color: var(--color-ink);
@@ -51,24 +65,36 @@ body {
 /* Scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #ffffff1f transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
 *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #ffffff1f;
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #ffffff33;
+  background: rgba(255, 255, 255, 0.24);
+  background-clip: padding-box;
 }
 
-/* Reusable surface helpers */
+/* Panel — glassy surface */
 @utility panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
+  background: rgba(20, 22, 28, 0.66);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+}
+
+@utility tile {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-card);
 }
 
@@ -76,4 +102,50 @@ body {
   color: var(--accent);
   background: var(--accent-soft);
   border: 1px solid var(--accent-line);
+}
+
+/* Eyebrow labels */
+@utility eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-faint);
+}
+
+/* Animations */
+@keyframes ping-dot {
+  75%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes cursor-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes draw-line {
+  to {
+    stroke-dashoffset: 0;
+  }
 }

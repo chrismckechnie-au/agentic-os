@@ -15,12 +15,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-      <body className="min-h-screen">
-        <div className="flex">
+      <body className="h-screen overflow-hidden">
+        <div className="grid h-screen" style={{ gridTemplateColumns: "auto 1fr" }}>
           <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-w-0 flex-col" style={{ height: "100vh" }}>
             <TopBar />
-            <main className="flex-1 px-6 py-6">{children}</main>
+            <main className="flex-1 overflow-y-auto px-8 py-7 pb-14">
+              <div className="mx-auto max-w-[1320px]">{children}</div>
+            </main>
           </div>
         </div>
       </body>
