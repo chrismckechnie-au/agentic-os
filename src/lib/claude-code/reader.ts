@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import type { SessionDetail, SessionMessage } from "@/lib/types";
 
 // Only usable in server components / API routes (Node.js runtime).
 
@@ -168,6 +169,112 @@ export function readSessions(limit = 50): ClaudeSession[] {
   return sessions
     .sort((a, b) => new Date(b.lastTimestamp).getTime() - new Date(a.lastTimestamp).getTime())
     .slice(0, limit);
+}
+
+function shortToolInput(input: unknown): string {
+  if (!input || typeof input !== "object") return "";
+  const o = input as Record<string, unknown>;
+  // Common Claude tool inputs: command, file_path, pattern, path, prompt, url
+  const v = o.command ?? o.file_path ?? o.pattern ?? o.path ?? o.url ?? o.prompt ?? o.description;
+  if (typeof v === "string") return v.replace(/[\r\n\t]+/g, " ").slice(0, 80);
+  return "";
+}
+
+function parseTranscript(lines: string[], max = 150): SessionMessage[] {
+  const msgs: SessionMessage[] = [];
+
+  for (const line of lines) {
+    let m: Record<string, unknown>;
+    try {
+      m = JSON.parse(line);
+    } catch {
+      continue;
+    }
+
+    const type = m.type;
+    const message = m.message as { content?: unknown } | undefined;
+    const ts = typeof m.timestamp === "string" ? m.timestamp : undefined;
+    if ((type !== "user" && type !== "assistant") || !message?.content) continue;
+
+    const content = message.content;
+
+    if (typeof content === "string") {
+      const text = content.replace(/\r/g, "").trim();
+      if (text) msgs.push({ role: type === "user" ? "user" : "agent", kind: type === "user" ? "prompt" : "output", text, ts });
+      continue;
+    }
+
+    if (!Array.isArray(content)) continue;
+
+    for (const block of content as Array<Record<string, unknown>>) {
+      const bt = block.type;
+      if (bt === "text" && typeof block.text === "string") {
+        const text = block.text.replace(/\r/g, "").trim();
+        if (text) msgs.push({ role: type === "user" ? "user" : "agent", kind: type === "user" ? "prompt" : "output", text, ts });
+      } else if (bt === "tool_use") {
+        const name = typeof block.name === "string" ? block.name : "tool";
+        const arg = shortToolInput(block.input);
+        msgs.push({ role: "agent", kind: "step", text: arg ? `${name}(${arg})` : name, ts });
+      }
+      // skip thinking, tool_result, image, and other noise
+    }
+  }
+
+  return msgs.slice(-max);
+}
+
+export function readSessionDetail(id: string): SessionDetail | null {
+  if (!fs.existsSync(CLAUDE_DIR)) return null;
+
+  const projectDirs = fs
+    .readdirSync(CLAUDE_DIR)
+    .filter((f) => {
+      try {
+        return fs.statSync(path.join(CLAUDE_DIR, f)).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+
+  let filePath: string | null = null;
+  for (const projectDir of projectDirs) {
+    const candidate = path.join(CLAUDE_DIR, projectDir, `${id}.jsonl`);
+    if (fs.existsSync(candidate)) {
+      filePath = candidate;
+      break;
+    }
+  }
+  if (!filePath) return null;
+
+  const content = fs.readFileSync(filePath, "utf-8");
+  const lines = content.split("\n").filter((l) => l.trim());
+
+  const meta = parseJsonlFile(filePath);
+  const transcript = parseTranscript(lines);
+  if (!meta.lastTimestamp) return null;
+
+  const diff = Date.now() - new Date(meta.lastTimestamp).getTime();
+  const diffMin = Math.floor(diff / 60_000);
+  const status = diffMin < 5 ? "active" : diffMin < 60 ? "in_progress" : "completed";
+  const { label, group } = relativeTime(meta.lastTimestamp);
+  const workspace = meta.cwd ? path.basename(meta.cwd) : undefined;
+
+  return {
+    id,
+    agentId: "claude-code",
+    title: meta.firstUserMsg ?? "Untitled session",
+    workspace,
+    status,
+    updatedAt: label,
+    group,
+    branch: meta.gitBranch ?? undefined,
+    model: meta.model ?? undefined,
+    startedAt: meta.firstTimestamp ?? undefined,
+    transcript,
+    tokensIn: meta.inputTokens,
+    tokensOut: meta.outputTokens,
+    totalTokens: meta.totalTokens,
+  };
 }
 
 export function readUsage(days = 30): ClaudeUsage {

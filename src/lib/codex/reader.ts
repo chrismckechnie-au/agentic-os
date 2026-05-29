@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import type { SessionDetail, SessionMessage } from "@/lib/types";
 
 // Only usable in server components / API routes (Node.js runtime).
 
@@ -148,6 +149,104 @@ export function readSessions(limit = 50): CodexSession[] {
       lastTimestamp: e.updated_at,
     };
   });
+}
+
+function isInstructionNoise(text: string): boolean {
+  const head = text.slice(0, 60);
+  return (
+    head.startsWith("# AGENTS.md") ||
+    head.includes("<permissions instructions>") ||
+    head.includes("<INSTRUCTIONS>") ||
+    head.includes("<user_instructions>") ||
+    head.includes("<environment_context>")
+  );
+}
+
+function blocksToText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return (content as Array<Record<string, unknown>>)
+    .map((b) => (typeof b.text === "string" ? b.text : ""))
+    .join("")
+    .trim();
+}
+
+function parseCodexTranscript(filePath: string, max = 150): SessionMessage[] {
+  const lines = fs.readFileSync(filePath, { encoding: "utf-8" }).split("\n").filter((l) => l.trim());
+  const msgs: SessionMessage[] = [];
+
+  for (const line of lines) {
+    let m: Record<string, unknown>;
+    try {
+      m = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (m.type !== "response_item") continue;
+    const payload = m.payload as { type?: string; role?: string; content?: unknown } | undefined;
+    if (payload?.type !== "message") continue;
+    const role = payload.role;
+    if (role !== "user" && role !== "assistant") continue;
+
+    const text = blocksToText(payload.content).replace(/\r/g, "").trim();
+    if (!text) continue;
+    if (role === "user" && isInstructionNoise(text)) continue;
+
+    const ts = typeof m.timestamp === "string" ? m.timestamp : undefined;
+    msgs.push({
+      role: role === "user" ? "user" : "agent",
+      kind: role === "user" ? "prompt" : "output",
+      text,
+      ts,
+    });
+  }
+
+  return msgs.slice(-max);
+}
+
+export function readSessionDetail(id: string): SessionDetail | null {
+  if (!fs.existsSync(SESSION_INDEX)) return null;
+
+  // Find the index entry to learn the session date.
+  const indexLines = fs.readFileSync(SESSION_INDEX, "utf-8").split("\n").filter((l) => l.trim());
+  let entry: { id: string; thread_name: string; updated_at: string } | null = null;
+  for (const line of indexLines) {
+    try {
+      const e = JSON.parse(line);
+      if (e.id === id) entry = e;
+    } catch {
+      // skip
+    }
+  }
+  if (!entry) return null;
+
+  const filePath = findSessionFile(id, entry.updated_at);
+  if (!filePath) return null;
+
+  const meta = parseSessionFile(filePath);
+  const transcript = parseCodexTranscript(filePath);
+
+  const diff = Date.now() - new Date(entry.updated_at).getTime();
+  const diffMin = Math.floor(diff / 60_000);
+  const status = diffMin < 5 ? "active" : diffMin < 60 ? "in_progress" : "completed";
+  const { label, group } = relativeTime(entry.updated_at);
+  const workspace = meta.cwd ? path.basename(meta.cwd) : undefined;
+
+  return {
+    id,
+    agentId: "codex",
+    title: entry.thread_name.replace(/[\r\n\t]+/g, " ").trim().slice(0, 100),
+    workspace,
+    status,
+    updatedAt: label,
+    group,
+    model: meta.model ?? undefined,
+    transcript,
+    tokensIn: meta.inputTokens,
+    tokensOut: meta.outputTokens,
+    totalTokens: meta.totalTokens,
+    sandbox: meta.cwd ?? undefined,
+  };
 }
 
 export function readUsage(days = 30): CodexUsage {

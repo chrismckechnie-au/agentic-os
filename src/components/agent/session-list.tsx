@@ -8,7 +8,17 @@ import type { Session } from "@/lib/types";
 
 const GROUP_ORDER = ["Today", "Yesterday", "Previous 7 days"];
 
-export function SessionList({ sessions, activeId }: { sessions: Session[]; activeId: string }) {
+export function SessionList({
+  sessions,
+  activeId,
+  onSelect,
+  onNew,
+}: {
+  sessions: Session[];
+  activeId: string;
+  onSelect?: (id: string) => void;
+  onNew?: () => void;
+}) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(activeId);
 
@@ -31,7 +41,10 @@ export function SessionList({ sessions, activeId }: { sessions: Session[]; activ
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-2 pb-3">
         <h2 className="text-sm font-semibold">Previous Sessions</h2>
-        <button className="grid size-7 place-items-center rounded-md border border-line bg-surface-2 text-muted transition-colors hover:text-ink">
+        <button
+          onClick={onNew}
+          className="grid size-7 place-items-center rounded-md border border-line bg-surface-2 text-muted transition-colors hover:text-ink"
+        >
           <Icon name="Plus" size={15} />
         </button>
       </div>
@@ -56,7 +69,7 @@ export function SessionList({ sessions, activeId }: { sessions: Session[]; activ
                 return (
                   <button
                     key={s.id}
-                    onClick={() => setSelected(s.id)}
+                    onClick={() => { setSelected(s.id); onSelect?.(s.id); }}
                     className={cn(
                       "w-full rounded-lg border px-3 py-2.5 text-left transition-colors",
                       on
