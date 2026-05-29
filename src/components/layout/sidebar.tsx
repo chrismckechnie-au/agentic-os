@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -90,12 +90,38 @@ function Section({
   );
 }
 
+interface UsageData {
+  available: boolean;
+  totalTokens: number;
+  outputTokens: number;
+  sessions: number;
+}
+
+function fmt(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return String(n);
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [usage, setUsage] = useState<UsageData | null>(null);
+
+  useEffect(() => {
+    fetch("/api/claude-code/usage")
+      .then((r) => r.json())
+      .then((d) => setUsage(d))
+      .catch(() => {});
+  }, []);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
+
+  const outputTokens = usage?.outputTokens ?? 0;
+  const totalTokens = usage?.totalTokens ?? 0;
+  const pct = totalTokens > 0 ? Math.round((outputTokens / totalTokens) * 100) : 0;
 
   return (
     <aside
@@ -135,17 +161,21 @@ export function Sidebar() {
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1.5 text-xs font-semibold">
                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
-                Pro Plan
+                Claude Code
               </span>
-              <span className="font-mono text-[11px] text-faint">68%</span>
+              <span className="font-mono text-[11px] text-faint">{usage?.available ? `${usage.sessions} sessions` : "—"}</span>
             </div>
             <div className="mt-2 h-[5px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
               <div
                 className="h-full rounded-full bg-[var(--accent)] transition-all duration-1000"
-                style={{ width: "68%", boxShadow: "0 0 8px color-mix(in srgb, var(--accent) 55%, transparent)" }}
+                style={{ width: `${usage?.available ? pct : 0}%`, boxShadow: "0 0 8px color-mix(in srgb, var(--accent) 55%, transparent)" }}
               />
             </div>
-            <p className="mt-2 text-[11px] text-faint">1.4M / 2M tokens this month</p>
+            {usage?.available ? (
+              <p className="mt-2 text-[11px] text-faint">{fmt(totalTokens)} tokens · {pct}% output</p>
+            ) : (
+              <p className="mt-2 text-[11px] text-faint">Loading usage…</p>
+            )}
           </div>
         )}
         <button

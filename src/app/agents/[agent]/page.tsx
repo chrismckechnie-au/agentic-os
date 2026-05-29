@@ -22,6 +22,8 @@ import {
   PlanList,
 } from "@/components/agent/panels";
 import type { AgentPageData } from "@/lib/providers/types";
+import { readSessions } from "@/lib/claude-code/reader";
+import type { Session } from "@/lib/types";
 
 export function generateStaticParams() {
   return AGENT_ORDER.map((agent) => ({ agent }));
@@ -188,6 +190,21 @@ export default async function AgentPage({ params }: { params: Promise<{ agent: s
   if (!isAgentId(agent)) notFound();
 
   const data = await getProvider().getAgentPage(agent);
+
+  if (agent === "claude-code") {
+    const real = readSessions(100);
+    if (real.length > 0) {
+      data.sessions = real.map((s): Session => ({
+        id: s.id,
+        agentId: "claude-code",
+        title: s.title,
+        workspace: s.workspace,
+        status: s.status,
+        updatedAt: s.updatedAt,
+        group: s.group,
+      }));
+    }
+  }
   const cfg = AGENTS[agent];
   const { tabs, panels, defaultId } = buildPanels(agent, data);
   const s = data.activeSession;
