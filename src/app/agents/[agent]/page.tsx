@@ -22,7 +22,8 @@ import {
   PlanList,
 } from "@/components/agent/panels";
 import type { AgentPageData } from "@/lib/providers/types";
-import { readSessions } from "@/lib/claude-code/reader";
+import { readSessions as readClaudeSessions } from "@/lib/claude-code/reader";
+import { readSessions as readCodexSessions } from "@/lib/codex/reader";
 import type { Session } from "@/lib/types";
 
 export function generateStaticParams() {
@@ -192,13 +193,28 @@ export default async function AgentPage({ params }: { params: Promise<{ agent: s
   const data = await getProvider().getAgentPage(agent);
 
   if (agent === "claude-code") {
-    const real = readSessions(100);
+    const real = readClaudeSessions(100);
     if (real.length > 0) {
       data.sessions = real.map((s): Session => ({
         id: s.id,
         agentId: "claude-code",
         title: s.title,
         workspace: s.workspace,
+        status: s.status,
+        updatedAt: s.updatedAt,
+        group: s.group,
+      }));
+    }
+  }
+
+  if (agent === "codex") {
+    const real = readCodexSessions(100);
+    if (real.length > 0) {
+      data.sessions = real.map((s): Session => ({
+        id: s.id,
+        agentId: "codex",
+        title: s.title,
+        workspace: s.workspace ?? undefined,
         status: s.status,
         updatedAt: s.updatedAt,
         group: s.group,
