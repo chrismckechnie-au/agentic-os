@@ -11,7 +11,7 @@ const isWin = os.platform() === "win32";
 
 function binExists(bin: string): boolean {
   try {
-    execSync(isWin ? `where ${bin}` : `command -v ${bin}`, { stdio: "ignore" });
+    execSync(isWin ? `where ${bin}` : `command -v ${bin}`, { stdio: "ignore", timeout: 3000 });
     return true;
   } catch {
     return false;
@@ -23,12 +23,13 @@ function processRunning(exeName: string): boolean {
     if (isWin) {
       const out = execSync(`tasklist /FI "IMAGENAME eq ${exeName}" /NH 2>nul`, {
         stdio: ["ignore", "pipe", "ignore"],
+        timeout: 3000,
       })
         .toString()
         .toLowerCase();
       return out.includes(exeName.toLowerCase());
     } else {
-      execSync(`pgrep -xi "${exeName}"`, { stdio: "ignore" });
+      execSync(`pgrep -xi "${exeName}"`, { stdio: "ignore", timeout: 3000 });
       return true;
     }
   } catch {

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getProvider } from "@/lib/providers";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card } from "@/components/ui/card";

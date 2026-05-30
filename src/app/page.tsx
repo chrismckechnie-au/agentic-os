@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { buildAgentSummaries } from "@/lib/agents/detect";
 import { buildOverviewStats, buildRecentSessions, buildSystemHealth, buildWorkspaces } from "@/lib/overview/real";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { buildActivity } from "@/lib/activity/real";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card } from "@/components/ui/card";

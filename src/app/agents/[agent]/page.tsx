@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
 import { getProvider } from "@/lib/providers";
