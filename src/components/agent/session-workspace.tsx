@@ -43,7 +43,14 @@ function buildPanels(
   cfg: AgentConfig,
   detail: SessionDetail,
   terminalNode: React.ReactNode,
-  extras: { memory?: MemoryStore[]; skills?: Skill[]; jobs?: Job[]; notes?: Note[] },
+  extras: {
+    memory?: MemoryStore[];
+    skills?: Skill[];
+    jobs?: Job[];
+    notes?: Note[];
+    note?: Note;
+    vaultStats?: { notes: number; links: number; vaultName: string };
+  },
 ): { tabs: TabDef[]; panels: Record<string, React.ReactNode>; defaultId: string } {
   const panels: Record<string, React.ReactNode> = { terminal: terminalNode };
   let defaultId = "terminal";
@@ -157,17 +164,28 @@ function buildPanels(
 
   if (agentId === "obsidian") {
     defaultId = "notes";
-    panels.notes = extras.notes?.[0] ? (
-      <NoteViewer note={extras.notes[0]} />
+    const note = extras.note ?? extras.notes?.[0];
+    const vs = extras.vaultStats;
+    panels.notes = note ? (
+      <NoteViewer note={note} />
     ) : (
       <Placeholder icon="FileText" text="No note selected" />
     );
-    panels.graph = <Placeholder icon="Network" text="Graph view — 1,284 notes · 9,612 links" />;
+    panels.graph = (
+      <Placeholder
+        icon="Network"
+        text={
+          vs
+            ? `Graph view — ${vs.notes.toLocaleString()} notes · ${vs.links.toLocaleString()} links`
+            : "Graph view"
+        }
+      />
+    );
     panels.settings = (
       <div className="divide-y divide-line">
-        <DetailRow label="Vault">Refuelr</DetailRow>
-        <DetailRow label="Notes">1,284</DetailRow>
-        <DetailRow label="Sync">Enabled</DetailRow>
+        <DetailRow label="Vault">{vs?.vaultName ?? "—"}</DetailRow>
+        <DetailRow label="Notes">{vs ? vs.notes.toLocaleString() : "—"}</DetailRow>
+        <DetailRow label="Links">{vs ? vs.links.toLocaleString() : "—"}</DetailRow>
       </div>
     );
   }
@@ -191,12 +209,13 @@ export function SessionWorkspace({
   skills,
   jobs,
   notes,
+  vaultStats,
 }: {
   agentId: AgentId;
   cfg: AgentConfig;
   initialSessions: Session[];
   initialDetail: SessionDetail;
-  /** Agent has a real session-history reader (claude-code, codex). */
+  /** Agent has a real session-history reader (claude-code, codex, hermes). */
   realData: boolean;
   /** Agent has a local CLI that can run live in a PTY (see cfg.liveCli / server.mjs). */
   liveAgent: boolean;
@@ -206,6 +225,7 @@ export function SessionWorkspace({
   skills?: Skill[];
   jobs?: Job[];
   notes?: Note[];
+  vaultStats?: { notes: number; links: number; vaultName: string };
 }) {
   const [selectedId, setSelectedId] = useState(initialDetail.id);
   const [detail, setDetail] = useState<SessionDetail>(initialDetail);
@@ -238,11 +258,13 @@ export function SessionWorkspace({
       setSelectedId(id);
       setLive(false); // browsing history exits the live session
       setMenuOpen(false);
-      if (!realData) return;
+      if (!realData) return; // obsidian: note switch is local (no fetch)
       setLoading(true);
       try {
         const endpoint =
-          agentId === "codex" ? `/api/codex/sessions/${id}` : `/api/claude-code/sessions/${id}`;
+          agentId === "codex" ? `/api/codex/sessions/${id}`
+          : agentId === "hermes" ? `/api/hermes/sessions/${id}`
+          : `/api/claude-code/sessions/${id}`;
         const res = await fetch(endpoint);
         if (res.ok) {
           const d = (await res.json()) as SessionDetail;
@@ -273,11 +295,16 @@ export function SessionWorkspace({
     <Terminal transcript={detail.transcript} prompt={prompt} heightClass={termHeight} />
   );
 
+  const selectedNote =
+    agentId === "obsidian" ? notes?.find((n) => n.id === selectedId) ?? notes?.[0] : undefined;
+
   const { tabs, panels, defaultId } = buildPanels(agentId, cfg, detail, terminalNode, {
     memory,
     skills,
     jobs,
     notes,
+    note: selectedNote,
+    vaultStats,
   });
 
   const cardTitle = loading ? "Loading…" : live ? `Live · ${cfg.name}` : detail.title;
@@ -398,7 +425,7 @@ export function SessionWorkspace({
           {agentId === "claude-code" && <ClaudeAside s={detail} />}
           {agentId === "codex" && <CodexAside s={detail} />}
           {agentId === "hermes" && <HermesAside memory={memory} skills={skills} jobs={jobs} />}
-          {agentId === "obsidian" && <ObsidianAside notes={notes} />}
+          {agentId === "obsidian" && <ObsidianAside notes={notes} vaultName={vaultStats?.vaultName} />}
         </div>
       )}
     </>

@@ -372,12 +372,12 @@ export function NoteViewer({ note }: { note: Note }) {
   );
 }
 
-export function ObsidianAside({ notes }: { notes?: Note[] }) {
+export function ObsidianAside({ notes, vaultName }: { notes?: Note[]; vaultName?: string }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Vault</CardTitle>
-        <span className="text-xs text-faint">Refuelr</span>
+        <span className="text-xs text-faint">{vaultName ?? "Refuelr"}</span>
       </CardHeader>
       <CardBody className="pt-0">
         <ul className="divide-y divide-line">

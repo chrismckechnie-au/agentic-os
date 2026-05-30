@@ -3,15 +3,7 @@ import "server-only";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
-import type {
-  Job,
-  MemoryStore,
-  Session,
-  SessionDetail,
-  SessionMessage,
-  SessionStatus,
-  Skill,
-} from "@/lib/types";
+import type { Job, MemoryStore, SessionStatus, Skill } from "@/lib/types";
 
 // Live reader for the Hermes agent (Nous Research hermes-agent), modelled on the
 // official refuelr-ops dashboard plugin (`plugin_api.py`). Reads the real
@@ -33,45 +25,6 @@ export function hermesAvailable(home = resolveHermesHome()): boolean {
 }
 
 // --- helpers ----------------------------------------------------------------
-
-/** ISO / epoch -> "just now" / "12m ago" / "3h ago" / "2d ago". */
-function ago(value: unknown): string | undefined {
-  if (value == null) return undefined;
-  let ms: number;
-  if (typeof value === "number") {
-    ms = value < 1e12 ? value * 1000 : value;
-  } else {
-    const t = new Date(String(value)).getTime();
-    if (!Number.isFinite(t)) return undefined;
-    ms = t;
-  }
-  const diff = Date.now() - ms;
-  if (diff < 0) return "just now";
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return "just now";
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d === 1) return "Yesterday";
-  if (d < 7) return `${d}d ago`;
-  return `${Math.floor(d / 7)}w ago`;
-}
-
-/** Sidebar grouping from an ISO / epoch value. */
-function groupOf(value: unknown): string {
-  if (value == null) return "Earlier";
-  let ms: number;
-  if (typeof value === "number") ms = value < 1e12 ? value * 1000 : value;
-  else ms = new Date(String(value)).getTime();
-  if (!Number.isFinite(ms)) return "Earlier";
-  const days = Math.floor((Date.now() - ms) / 86_400_000);
-  if (days <= 0) return "Today";
-  if (days === 1) return "Yesterday";
-  if (days <= 7) return "Previous 7 days";
-  return "Earlier";
-}
 
 function humanBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(2)} GB`;
@@ -219,106 +172,4 @@ export function readMemory(home = resolveHermesHome()): MemoryStore[] {
       size: humanBytes(t.bytes),
       pct: Math.round((t.bytes / total) * 100),
     }));
-}
-
-/** Newest cron/output/{id}/*.md path for a job, or null. */
-function latestOutputFile(home: string, jobId: string): string | null {
-  const dir = path.join(home, "cron", "output", jobId);
-  let entries: string[];
-  try {
-    entries = fs.readdirSync(dir).filter((f) => f.endsWith(".md"));
-  } catch {
-    return null;
-  }
-  if (!entries.length) return null;
-  let newest: { file: string; mtime: number } | null = null;
-  for (const f of entries) {
-    const full = path.join(dir, f);
-    try {
-      const m = fs.statSync(full).mtimeMs;
-      if (!newest || m > newest.mtime) newest = { file: full, mtime: m };
-    } catch {
-      /* skip */
-    }
-  }
-  return newest?.file ?? null;
-}
-
-export function readSessions(limit = 50, home = resolveHermesHome()): Session[] {
-  const records = loadJobRecords(home);
-  const sessions: { session: Session; sortMs: number }[] = [];
-
-  for (const j of records) {
-    const id = j.id != null ? String(j.id) : null;
-    if (!id) continue;
-    const outFile = latestOutputFile(home, id);
-    if (!outFile) continue; // only jobs with real output become sessions
-
-    let mtime = 0;
-    try {
-      mtime = fs.statSync(outFile).mtimeMs;
-    } catch {
-      /* ignore */
-    }
-    const when = j.last_run_at ?? (mtime ? mtime : undefined);
-    const enabled = j.enabled === undefined ? true : Boolean(j.enabled);
-
-    sessions.push({
-      sortMs: typeof when === "number" ? (when < 1e12 ? when * 1000 : when) : new Date(String(when)).getTime() || mtime,
-      session: {
-        id,
-        agentId: "hermes",
-        title: String(j.name ?? id),
-        workspace: "hermes",
-        status: statusFromLast(j.last_status, enabled),
-        updatedAt: ago(when) ?? "—",
-        group: groupOf(when),
-      },
-    });
-  }
-
-  sessions.sort((a, b) => b.sortMs - a.sortMs);
-  return sessions.slice(0, limit).map((s) => s.session);
-}
-
-function markdownToTranscript(jobName: string, md: string): SessionMessage[] {
-  const msgs: SessionMessage[] = [{ role: "agent", kind: "info", text: `Latest output — ${jobName}` }];
-  const lines = md.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-  for (const line of lines) {
-    const text = line.length ? line : " ";
-    msgs.push({ role: "agent", kind: line.startsWith("#") ? "step" : "output", text });
-  }
-  return msgs.slice(0, 400);
-}
-
-export function readSessionDetail(id: string, home = resolveHermesHome()): SessionDetail | null {
-  const records = loadJobRecords(home);
-  const job = records.find((j) => String(j.id ?? "") === id);
-  if (!job) return null;
-  const outFile = latestOutputFile(home, id);
-  if (!outFile) return null;
-
-  let md = "";
-  let mtime = 0;
-  try {
-    md = fs.readFileSync(outFile, "utf-8");
-    mtime = fs.statSync(outFile).mtimeMs;
-  } catch {
-    return null;
-  }
-  const enabled = job.enabled === undefined ? true : Boolean(job.enabled);
-  const when = job.last_run_at ?? mtime;
-  const name = String(job.name ?? id);
-
-  return {
-    id,
-    agentId: "hermes",
-    title: name,
-    workspace: "hermes",
-    status: statusFromLast(job.last_status, enabled),
-    updatedAt: ago(when) ?? "—",
-    group: groupOf(when),
-    startedAt: ago(when),
-    transcript: markdownToTranscript(name, md),
-  };
 }

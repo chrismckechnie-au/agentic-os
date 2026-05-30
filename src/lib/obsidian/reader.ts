@@ -107,9 +107,9 @@ export function readNotes(limit = 200): Note[] {
   return notes;
 }
 
-export function readVaultStats(): { notes: number; links: number } {
+export function readVaultStats(): { notes: number; links: number; vaultName: string } {
   const vault = getVaultPath();
-  if (!vault) return { notes: 0, links: 0 };
+  if (!vault) return { notes: 0, links: 0, vaultName: "—" };
 
   const files = collectMarkdownFiles(vault);
   let links = 0;
@@ -124,5 +124,5 @@ export function readVaultStats(): { notes: number; links: number } {
     }
   }
 
-  return { notes: files.length, links };
+  return { notes: files.length, links, vaultName: path.basename(vault) };
 }

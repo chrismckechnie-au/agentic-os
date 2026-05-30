@@ -14,16 +14,19 @@ import {
   readSessions as readCodexSessions,
   readSessionDetail as readCodexDetail,
 } from "@/lib/codex/reader";
-import { readNotes } from "@/lib/obsidian/reader";
+import { readNotes, readVaultStats } from "@/lib/obsidian/reader";
 import {
   hermesAvailable,
   readJobs as readHermesJobs,
   readSkills as readHermesSkills,
   readMemory as readHermesMemory,
+} from "@/lib/hermes/reader";
+import {
+  stateDbExists as hermesStateDbExists,
   readSessions as readHermesSessions,
   readSessionDetail as readHermesDetail,
-} from "@/lib/hermes/reader";
-import type { Session, SessionDetail } from "@/lib/types";
+} from "@/lib/hermes/state";
+import type { Note, Session, SessionDetail } from "@/lib/types";
 import { buildClaudeStats, buildCodexStats, buildHermesStats } from "@/lib/agents/stats";
 
 export function generateStaticParams() {
@@ -89,33 +92,49 @@ export default async function AgentPage({
     }
   }
 
+  let vaultStats: { notes: number; links: number; vaultName: string } | undefined;
   if (agent === "obsidian") {
     const notes = readNotes(200);
     if (notes.length > 0) {
       data.notes = notes;
-    }
-    // vault stats available for future Graph tab header use
-    // const vaultStats = readVaultStats();
-  }
-
-  if (agent === "hermes" && hermesAvailable()) {
-    const jobs = readHermesJobs();
-    const skills = readHermesSkills();
-    const memory = readHermesMemory();
-    if (jobs.length > 0) data.jobs = jobs;
-    if (skills.length > 0) data.skills = skills;
-    if (memory.length > 0) data.memory = memory;
-
-    const real = readHermesSessions(100);
-    if (real.length > 0) {
-      data.sessions = real;
-      const detailId = reqSession && real.some((r) => r.id === reqSession) ? reqSession : real[0].id;
-      const d = readHermesDetail(detailId);
-      if (d) initialDetail = d;
+      vaultStats = readVaultStats();
+      // Notes drive the left rail; selecting one renders it (no fetch — notes are loaded).
+      data.sessions = notes.map((n: Note): Session => ({
+        id: n.id,
+        agentId: "obsidian",
+        title: n.title,
+        updatedAt: n.updatedAt,
+        group: n.group,
+        status: "completed",
+      }));
+      initialDetail = { ...initialDetail, id: notes[0].id };
     }
   }
 
-  const realData = agent === "claude-code" || agent === "codex";
+  let hermesRealSessions = false;
+  if (agent === "hermes") {
+    if (hermesAvailable()) {
+      const jobs = readHermesJobs();
+      const skills = readHermesSkills();
+      const memory = readHermesMemory();
+      if (jobs.length > 0) data.jobs = jobs;
+      if (skills.length > 0) data.skills = skills;
+      if (memory.length > 0) data.memory = memory;
+    }
+    if (hermesStateDbExists()) {
+      const real = readHermesSessions(100);
+      if (real.length > 0) {
+        hermesRealSessions = true;
+        data.sessions = real;
+        const detailId = reqSession && real.some((r) => r.id === reqSession) ? reqSession : real[0].id;
+        const d = readHermesDetail(detailId);
+        if (d) initialDetail = d;
+      }
+    }
+  }
+
+  const realData =
+    agent === "claude-code" || agent === "codex" || (agent === "hermes" && hermesRealSessions);
   const liveAgent = Boolean(cfg.liveCli);
   const autoStartLive = isNew === "1" && liveAgent;
   const hermesStats = agent === "hermes" ? buildHermesStats() : [];
@@ -148,6 +167,7 @@ export default async function AgentPage({
           skills={data.skills}
           jobs={data.jobs}
           notes={data.notes}
+          vaultStats={vaultStats}
         />
       </div>
     </div>
