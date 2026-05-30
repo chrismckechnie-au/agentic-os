@@ -26,13 +26,12 @@ export function getProvider(): DataProvider {
       cached = new MockProvider();
       break;
     case "live":
-      // When ready: `cached = new LiveProvider(...)` composed from ./live/*.
-      throw new Error(
-        "DATA_SOURCE=live is not implemented yet. Implement the providers in " +
-          "src/lib/providers/live/ and compose them here.",
-      );
     default:
-      throw new Error(`Unknown DATA_SOURCE: ${source}`);
+      // Real data is wired directly in page.tsx / route handlers (not through
+      // the provider). MockProvider supplies the base scaffold that those
+      // readers override, so live mode falls through to mock here.
+      cached = new MockProvider();
+      break;
   }
 
   return cached;
