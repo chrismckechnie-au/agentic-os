@@ -3,8 +3,19 @@ import "server-only";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 import type { KanbanTask, TaskStatus } from "@/lib/types";
+
+// node:sqlite requires Node ≥ 22. On older runtimes we degrade gracefully.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tryOpenDb(dbPath: string): any | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+    const { DatabaseSync } = require("node:sqlite") as any;
+    return new DatabaseSync(dbPath, { readOnly: true });
+  } catch {
+    return null;
+  }
+}
 
 // Live reader for Hermes' kanban (hermes_cli/kanban_db.py). Reads the SQLite
 // `tasks` table directly via Node's built-in node:sqlite — no native deps, no
@@ -92,7 +103,8 @@ function parseSkills(raw: unknown): string[] | undefined {
 type DbRow = Record<string, unknown>;
 
 /** Best-effort dependency counts from task_links, auto-detecting the child FK column. */
-function depCounts(db: DatabaseSync): Map<string, number> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function depCounts(db: any): Map<string, number> {
   const out = new Map<string, number>();
   try {
     const cols = (db.prepare("PRAGMA table_info(task_links)").all() as DbRow[]).map((r) => String(r.name));
@@ -113,7 +125,8 @@ function depCounts(db: DatabaseSync): Map<string, number> {
  * Throws if the DB can't be opened/read — callers fall back to mock.
  */
 export function readTasks(dbPath = resolveDbPath()): KanbanTask[] {
-  const db = new DatabaseSync(dbPath, { readOnly: true });
+  const db = tryOpenDb(dbPath);
+  if (!db) return [];
   try {
     const deps = depCounts(db);
     const rows = db

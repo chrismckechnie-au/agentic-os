@@ -3,8 +3,19 @@ import "server-only";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 import type { Session, SessionDetail, SessionMessage } from "@/lib/types";
+
+// node:sqlite requires Node ≥ 22. On older runtimes we degrade gracefully.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tryOpenDb(dbPath: string): any | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+    const { DatabaseSync } = require("node:sqlite") as any;
+    return new DatabaseSync(dbPath, { readOnly: true });
+  } catch {
+    return null;
+  }
+}
 
 // Live reader for Hermes chat history. Reads ~/.hermes/state.db (the same store
 // Hermes' own dashboard serves via hermes_state.SessionDB) directly through
@@ -88,7 +99,8 @@ function titleOf(row: DbRow): string {
 // --- public API -------------------------------------------------------------
 
 export function readSessions(limit = 100, dbPath = resolveStateDb()): Session[] {
-  const db = new DatabaseSync(dbPath, { readOnly: true });
+  const db = tryOpenDb(dbPath);
+  if (!db) return [];
   try {
     const rows = db
       .prepare(
@@ -132,7 +144,8 @@ function mapMessage(r: DbRow): SessionMessage | null {
 }
 
 export function readSessionDetail(id: string, dbPath = resolveStateDb()): SessionDetail | null {
-  const db = new DatabaseSync(dbPath, { readOnly: true });
+  const db = tryOpenDb(dbPath);
+  if (!db) return null;
   try {
     const row = db
       .prepare(
