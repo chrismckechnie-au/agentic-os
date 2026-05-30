@@ -4,6 +4,6 @@ import { getKanbanTasks } from "@/lib/providers";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const { tasks, source, dbPath } = await getKanbanTasks();
-  return NextResponse.json({ source, dbPath, tasks });
+  const { tasks, source, dbPath, boardSlug, resolution, reason } = await getKanbanTasks();
+  return NextResponse.json({ source, dbPath, boardSlug, resolution, reason, tasks });
 }

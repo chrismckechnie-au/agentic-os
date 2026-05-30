@@ -100,6 +100,7 @@ export interface AgentSummary {
   name: string;
   tagline: string;
   status: "online" | "offline" | "running" | "degraded";
+  liveCliAvailable: boolean;
   lastSessionAgo: string;
   activeSession?: string;
   currentTask?: string;
@@ -113,16 +114,19 @@ export interface Repo {
   id: string;
   name: string;
   owner: string;
-  description: string;
-  language: string;
+  description?: string;
+  language?: string;
   languageColor?: string;
-  stars: number;
-  forks: number;
-  openIssues: number;
-  openPRs: number;
-  pushedAt: string;
-  defaultBranch: string;
-  private: boolean;
+  stars?: number;
+  forks?: number;
+  openIssues?: number;
+  openPRs?: number;
+  pushedAt?: string;
+  defaultBranch?: string;
+  private?: boolean;
+  visibility?: "public" | "private" | "unknown";
+  metadataSource?: "github" | "local";
+  metadataStatus?: "available" | "unavailable" | "unauthenticated" | "not_github";
   /** Number of agents currently attached to this repo. */
   agents?: number;
 }

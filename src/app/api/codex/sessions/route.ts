@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { readSessions } from "@/lib/codex/reader";
+import { getProvider } from "@/lib/providers";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const sessions = readSessions(50);
+    const sessions = await getProvider().listSessions("codex");
     return NextResponse.json({ sessions, available: sessions.length > 0 });
   } catch {
     return NextResponse.json({ sessions: [], available: false });

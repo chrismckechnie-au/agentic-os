@@ -28,11 +28,39 @@ function Dropdown({
   );
 }
 
-export function TopBar({ notifications = [] }: { notifications?: ActivityItem[] }) {
+const SYSTEM_STYLES = {
+  healthy: {
+    className: "border-ok/25 bg-ok/10 text-ok",
+    dot: "bg-ok",
+  },
+  running: {
+    className: "border-[var(--accent)]/25 bg-[var(--accent)]/10 text-[var(--accent)]",
+    dot: "bg-[var(--accent)]",
+  },
+  degraded: {
+    className: "border-warn/25 bg-warn/10 text-warn",
+    dot: "bg-warn",
+  },
+  down: {
+    className: "border-danger/25 bg-danger/10 text-danger",
+    dot: "bg-danger",
+  },
+} as const;
+
+export function TopBar({
+  notifications = [],
+  systemState = "healthy",
+  systemLabel = "System ready",
+}: {
+  notifications?: ActivityItem[];
+  systemState?: keyof typeof SYSTEM_STYLES;
+  systemLabel?: string;
+}) {
   const [open, setOpen] = useState<"org" | "bell" | "avatar" | null>(null);
   const toggle = (m: "org" | "bell" | "avatar") => setOpen((v) => (v === m ? null : m));
   const close = () => setOpen(null);
   const count = notifications.length;
+  const systemStyle = SYSTEM_STYLES[systemState] ?? SYSTEM_STYLES.healthy;
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-line bg-canvas/70 px-6 backdrop-blur">
@@ -71,9 +99,11 @@ export function TopBar({ notifications = [] }: { notifications?: ActivityItem[] 
         </div>
 
         {/* System status */}
-        <span className="hidden h-9 items-center gap-2 rounded-lg border border-ok/25 bg-ok/10 px-3 text-sm font-medium text-ok md:flex">
-          <span className="size-2 rounded-full bg-ok animate-pulse" />
-          System Healthy
+        <span
+          className={`hidden h-9 items-center gap-2 rounded-lg border px-3 text-sm font-medium md:flex ${systemStyle.className}`}
+        >
+          <span className={`size-2 rounded-full ${systemStyle.dot} animate-pulse`} />
+          {systemLabel}
         </span>
 
         {/* Notifications */}

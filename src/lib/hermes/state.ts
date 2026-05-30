@@ -7,10 +7,29 @@ import type { Session, SessionDetail, SessionMessage } from "@/lib/types";
 
 // node:sqlite requires Node ≥ 22. On older runtimes we degrade gracefully.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function loadSqlite(): any | null {
+  try {
+    const builtinLoader = (
+      process as NodeJS.Process & {
+        getBuiltinModule?: (id: string) => unknown;
+      }
+    ).getBuiltinModule;
+    if (typeof builtinLoader === "function") {
+      return builtinLoader("node:sqlite");
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("node:sqlite");
+  } catch {
+    return null;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tryOpenDb(dbPath: string): any | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-    const { DatabaseSync } = require("node:sqlite") as any;
+    const sqlite = loadSqlite();
+    const DatabaseSync = sqlite?.DatabaseSync;
+    if (!DatabaseSync) return null;
     return new DatabaseSync(dbPath, { readOnly: true });
   } catch {
     return null;
@@ -28,7 +47,7 @@ function tryOpenDb(dbPath: string): any | null {
 /** Resolve the state.db path: $HERMES_STATE_DB or $HERMES_HOME/state.db or ~/.hermes/state.db. */
 export function resolveStateDb(): string {
   if (process.env.HERMES_STATE_DB) return process.env.HERMES_STATE_DB;
-  const home = process.env.HERMES_HOME || path.join(os.homedir(), ".hermes");
+  const home = process.env.HERMES_HOME || path.join(/* turbopackIgnore: true */ os.homedir(), ".hermes");
   return path.join(home, "state.db");
 }
 
@@ -37,6 +56,33 @@ export function stateDbExists(dbPath = resolveStateDb()): boolean {
     return fs.statSync(dbPath).isFile();
   } catch {
     return false;
+  }
+}
+
+export function getStateDbHealth(dbPath = resolveStateDb()): {
+  available: boolean;
+  readable: boolean;
+  dbPath: string;
+  reason?: string;
+} {
+  if (!stateDbExists(dbPath)) {
+    return { available: false, readable: false, dbPath };
+  }
+
+  const db = tryOpenDb(dbPath);
+  if (!db) {
+    return {
+      available: true,
+      readable: false,
+      dbPath,
+      reason: "node:sqlite is unavailable; run the service on Node 22+",
+    };
+  }
+
+  try {
+    return { available: true, readable: true, dbPath };
+  } finally {
+    db.close();
   }
 }
 

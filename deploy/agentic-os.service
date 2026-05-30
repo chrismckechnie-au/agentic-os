@@ -13,10 +13,14 @@ After=network.target
 [Service]
 WorkingDirectory=%h/agentic-os
 Environment=NODE_ENV=production
+Environment=PATH=%h/.hermes/node/bin:%h/.hermes/hermes-agent/venv/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=-%h/.agentic-os.env
-ExecStart=/usr/bin/node server.mjs
+ExecStart=%h/.hermes/node/bin/node server.mjs
 Restart=on-failure
 RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
 
 [Install]
 WantedBy=default.target

@@ -1,23 +1,23 @@
 // Server-only. Derives real Overview stats and recent sessions from local readers.
 import type { Session, StatMetric, HealthItem, WorkspaceSummary } from "@/lib/types";
 import type { AgentSummary } from "@/lib/types";
-import { readSessions as readClaudeSessions } from "@/lib/claude-code/reader";
-import { readSessions as readCodexSessions } from "@/lib/codex/reader";
+import { readLiveSessionSnapshot } from "@/lib/providers/live/session-snapshot";
 
-export function buildOverviewStats(agents: AgentSummary[]): StatMetric[] {
-  const claudeSessions = (() => { try { return readClaudeSessions(200); } catch { return []; } })();
-  const codexSessions  = (() => { try { return readCodexSessions(200); } catch { return []; } })();
+export function buildOverviewStats(
+  agents: AgentSummary[],
+  sessions: Session[] = readLiveSessionSnapshot().all,
+): StatMetric[] {
 
   const running   = agents.filter((a) => a.status === "running").length;
   const total     = agents.length;
-  const activeSess = [...claudeSessions, ...codexSessions].filter(
+  const activeSess = sessions.filter(
     (s) => s.status === "active" || s.status === "in_progress",
   ).length;
-  const completed = [...claudeSessions, ...codexSessions].filter(
+  const completed = sessions.filter(
     (s) => s.status === "completed",
   ).length;
   const workspaces = new Set(
-    [...claudeSessions, ...codexSessions].map((s) => s.workspace).filter(Boolean),
+    sessions.map((s) => s.workspace).filter(Boolean),
   ).size;
 
   return [
@@ -33,7 +33,7 @@ export function buildOverviewStats(agents: AgentSummary[]): StatMetric[] {
       id: "active-sessions",
       label: "Active Sessions",
       value: String(activeSess),
-      hint: `${claudeSessions.length + codexSessions.length} total sessions`,
+      hint: `${sessions.length} total sessions`,
       icon: "MessageSquare",
       spark: [Math.max(0, activeSess - 3), activeSess - 2, activeSess - 1, activeSess - 1, activeSess, activeSess, activeSess],
     },
@@ -41,7 +41,7 @@ export function buildOverviewStats(agents: AgentSummary[]): StatMetric[] {
       id: "tasks-completed",
       label: "Tasks Completed",
       value: String(completed),
-      hint: `${claudeSessions.filter((s) => s.group === "Today").length + codexSessions.filter((s) => s.group === "Today").length} today`,
+      hint: `${sessions.filter((s) => s.group === "Today").length} today`,
       icon: "CircleCheck",
       spark: [Math.max(0, completed - 20), completed - 15, completed - 10, completed - 6, completed - 3, completed - 1, completed],
     },
@@ -70,20 +70,14 @@ export function buildSystemHealth(agents: AgentSummary[]): HealthItem[] {
   }));
 }
 
-export function buildWorkspaces(): WorkspaceSummary[] {
-  const claude = (() => { try { return readClaudeSessions(200); } catch { return []; } })();
-  const codex  = (() => { try { return readCodexSessions(200); } catch { return []; } })();
-
+export function buildWorkspaces(
+  sessions: Session[] = readLiveSessionSnapshot().all,
+): WorkspaceSummary[] {
   const map = new Map<string, Set<string>>();
-  for (const s of claude) {
-    if (!s.workspace) continue;
-    if (!map.has(s.workspace)) map.set(s.workspace, new Set());
-    map.get(s.workspace)!.add("claude-code");
-  }
-  for (const s of codex) {
-    if (!s.workspace) continue;
-    if (!map.has(s.workspace)) map.set(s.workspace, new Set());
-    map.get(s.workspace)!.add("codex");
+  for (const session of sessions) {
+    if (!session.workspace) continue;
+    if (!map.has(session.workspace)) map.set(session.workspace, new Set());
+    map.get(session.workspace)?.add(session.agentId);
   }
 
   return [...map.entries()]
@@ -91,31 +85,9 @@ export function buildWorkspaces(): WorkspaceSummary[] {
     .sort((a, b) => b.agents - a.agents);
 }
 
-export function buildRecentSessions(): Session[] {
-  const claudeSessions = (() => { try { return readClaudeSessions(10); } catch { return []; } })();
-  const codexSessions  = (() => { try { return readCodexSessions(10); } catch { return []; } })();
-
-  const sessions: Session[] = [
-    ...claudeSessions.slice(0, 5).map((s) => ({
-      id: s.id,
-      agentId: "claude-code" as const,
-      title: s.title,
-      workspace: s.workspace,
-      status: s.status,
-      updatedAt: s.updatedAt,
-      group: s.group,
-    })),
-    ...codexSessions.slice(0, 5).map((s) => ({
-      id: s.id,
-      agentId: "codex" as const,
-      title: s.title,
-      workspace: s.workspace ?? undefined,
-      status: s.status,
-      updatedAt: s.updatedAt,
-      group: s.group,
-    })),
-  ];
-
+export function buildRecentSessions(
+  sessions: Session[] = readLiveSessionSnapshot().all,
+): Session[] {
   // Sort by recency — "just now" < "Xm ago" < "Xh ago"
   const weight = (u: string) => {
     if (u === "just now") return 0;

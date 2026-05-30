@@ -8,14 +8,50 @@ jobs:
   deploy:
     runs-on: self-hosted
     steps:
+      - name: Verify clean worktree
+        run: |
+          set -e
+          cd ~/agentic-os
+          git update-index -q --refresh
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "Working tree is dirty; refusing in-place deploy."
+            exit 1
+          fi
+
       - name: Pull latest code
-        run: git -C ~/agentic-os pull
+        run: git -C ~/agentic-os pull --ff-only
 
       - name: Install deps
-        run: cd ~/agentic-os && npm install --prefer-offline
+        run: |
+          set -e
+          export PATH="$HOME/.hermes/node/bin:$PATH"
+          cd ~/agentic-os
+          npm ci
 
       - name: Build
-        run: cd ~/agentic-os && npm run build
+        run: |
+          set -e
+          export PATH="$HOME/.hermes/node/bin:$PATH"
+          cd ~/agentic-os
+          npm run build
 
       - name: Restart service
-        run: systemctl --user restart agentic-os && systemctl --user is-active agentic-os
+        run: |
+          set -e
+          systemctl --user daemon-reload
+          systemctl --user restart agentic-os
+          systemctl --user is-active agentic-os
+
+      - name: Verify readiness
+        run: |
+          set -e
+          for _ in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:3017/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Readiness check failed"
+          journalctl --user -u agentic-os -n 80 --no-pager || true
+          exit 1

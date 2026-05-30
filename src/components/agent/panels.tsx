@@ -71,6 +71,11 @@ export function PlanList({ plan }: { plan: NonNullable<SessionDetail["plan"]> })
   );
 }
 
+function memoryTotal(memory?: MemoryStore[]): string | null {
+  if (!memory || memory.length === 0) return null;
+  return memory.map((store) => store.size).join(" + ");
+}
+
 function CommitList({ commits }: { commits: Commit[] }) {
   return (
     <ul className="space-y-2.5">
@@ -219,11 +224,11 @@ export function CodexAside({ s }: { s: SessionDetail }) {
             <div className="text-[11px] text-faint">Files</div>
           </div>
           <div className="rounded-lg border border-line bg-surface-2 py-3">
-            <div className="text-lg font-bold text-ok">42/42</div>
+            <div className="text-lg font-bold">—</div>
             <div className="text-[11px] text-faint">Tests</div>
           </div>
           <div className="rounded-lg border border-line bg-surface-2 py-3">
-            <div className="text-lg font-bold">1</div>
+            <div className="text-lg font-bold">{s.commits?.length ?? 0}</div>
             <div className="text-[11px] text-faint">Commits</div>
           </div>
         </CardBody>
@@ -249,7 +254,7 @@ export function HermesAside({
         <Card>
           <CardHeader>
             <CardTitle>Memory</CardTitle>
-            <span className="text-xs text-faint">2.43 GB / 8 GB</span>
+            <span className="text-xs text-faint">{memoryTotal(memory) ?? "No stores detected"}</span>
           </CardHeader>
           <CardBody className="space-y-3 pt-0">
             {memory.map((m) => (
@@ -271,7 +276,7 @@ export function HermesAside({
         <Card>
           <CardHeader>
             <CardTitle>Skills</CardTitle>
-            <span className="text-xs text-faint">{skills.length} active</span>
+            <span className="text-xs text-faint">{skills.filter((skill) => skill.status === "active").length} active</span>
           </CardHeader>
           <CardBody className="pt-0">
             <ul className="divide-y divide-line">
@@ -359,11 +364,6 @@ export function NoteViewer({ note }: { note: Note }) {
             {note.title}
           </span>
         </CardTitle>
-        <div className="flex items-center gap-1 text-faint">
-          <button className="grid size-7 place-items-center rounded-md hover:bg-surface-2 hover:text-muted">
-            <Icon name="ExternalLink" size={14} />
-          </button>
-        </div>
       </CardHeader>
       <CardBody>
         <MarkdownLite source={note.body} />

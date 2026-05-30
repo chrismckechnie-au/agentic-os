@@ -13,7 +13,7 @@ import type { Job, MemoryStore, SessionStatus, Skill } from "@/lib/types";
 
 /** Resolve the Hermes home: $HERMES_HOME or ~/.hermes (matches get_hermes_home()). */
 export function resolveHermesHome(): string {
-  return process.env.HERMES_HOME || path.join(os.homedir(), ".hermes");
+  return process.env.HERMES_HOME || path.join(/* turbopackIgnore: true */ os.homedir(), ".hermes");
 }
 
 export function hermesAvailable(home = resolveHermesHome()): boolean {

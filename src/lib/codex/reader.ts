@@ -2,12 +2,14 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import type { SessionDetail, SessionMessage } from "@/lib/types";
+import { readThroughCache } from "@/lib/server/cache";
 
 // Only usable in server components / API routes (Node.js runtime).
 
-const CODEX_DIR = path.join(os.homedir(), ".codex");
+const CODEX_DIR = path.join(/* turbopackIgnore: true */ os.homedir(), ".codex");
 const SESSION_INDEX = path.join(CODEX_DIR, "session_index.jsonl");
 const SESSIONS_DIR = path.join(CODEX_DIR, "sessions");
+const CACHE_TTL_MS = 30_000;
 
 function relativeTime(ts: string): { label: string; group: string } {
   const diff = Date.now() - new Date(ts).getTime();
@@ -34,6 +36,7 @@ export interface CodexSession {
   agentId: "codex";
   title: string;
   workspace: string | null;
+  cwd: string | null;
   status: "active" | "in_progress" | "completed";
   updatedAt: string;
   group: string;
@@ -62,6 +65,41 @@ function findSessionFile(id: string, dateStr: string): string | null {
   if (!fs.existsSync(dir)) return null;
   const files = fs.readdirSync(dir).filter((f) => f.endsWith(id + ".jsonl"));
   return files.length > 0 ? path.join(dir, files[0]) : null;
+}
+
+interface SessionIndexEntry {
+  id: string;
+  thread_name: string;
+  updated_at: string;
+}
+
+function readIndexEntries(): SessionIndexEntry[] {
+  if (!fs.existsSync(SESSION_INDEX)) return [];
+
+  const stat = fs.statSync(SESSION_INDEX);
+  return readThroughCache(
+    "codex:session-index",
+    CACHE_TTL_MS,
+    () => {
+      const lines = fs.readFileSync(SESSION_INDEX, "utf-8").split("\n").filter((l) => l.trim());
+      const entries: SessionIndexEntry[] = [];
+
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+          if (entry.id && entry.thread_name && entry.updated_at) {
+            entries.push(entry);
+          }
+        } catch {
+          // skip malformed lines
+        }
+      }
+
+      entries.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      return entries;
+    },
+    `${stat.mtimeMs}:${stat.size}`,
+  );
 }
 
 const RATE_LIMIT_PATTERNS = [
@@ -110,24 +148,18 @@ function parseSessionFile(filePath: string): {
   return result;
 }
 
+function parseCachedSessionFile(filePath: string): ReturnType<typeof parseSessionFile> {
+  const stat = fs.statSync(filePath);
+  return readThroughCache(
+    `codex:session-file:${filePath}`,
+    CACHE_TTL_MS,
+    () => parseSessionFile(filePath),
+    `${stat.mtimeMs}:${stat.size}`,
+  );
+}
+
 export function readSessions(limit = 50): CodexSession[] {
-  if (!fs.existsSync(SESSION_INDEX)) return [];
-
-  const lines = fs.readFileSync(SESSION_INDEX, "utf-8").split("\n").filter((l) => l.trim());
-  const entries: { id: string; thread_name: string; updated_at: string }[] = [];
-
-  for (const line of lines) {
-    try {
-      const e = JSON.parse(line);
-      if (e.id && e.thread_name && e.updated_at) entries.push(e);
-    } catch {
-      // skip
-    }
-  }
-
-  // Sort newest first
-  entries.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-  const recent = entries.slice(0, limit);
+  const recent = readIndexEntries().slice(0, limit);
 
   return recent.map((e) => {
     const diff = Date.now() - new Date(e.updated_at).getTime();
@@ -137,15 +169,19 @@ export function readSessions(limit = 50): CodexSession[] {
 
     // Try to read cwd from session file (best-effort, skip if slow)
     let workspace: string | null = null;
+    let cwd: string | null = null;
     let model: string | null = null;
     let hitLimit = false;
+    let totalTokens = 0;
     try {
       const filePath = findSessionFile(e.id, e.updated_at);
       if (filePath) {
-        const parsed = parseSessionFile(filePath);
+        const parsed = parseCachedSessionFile(filePath);
+        cwd = parsed.cwd;
         workspace = parsed.cwd ? path.basename(parsed.cwd) : null;
         model = parsed.model;
         hitLimit = parsed.hitLimit;
+        totalTokens = parsed.totalTokens;
       }
     } catch {
       // best-effort
@@ -156,11 +192,12 @@ export function readSessions(limit = 50): CodexSession[] {
       agentId: "codex" as const,
       title: e.thread_name.replace(/[\r\n\t]+/g, " ").trim().slice(0, 100),
       workspace,
+      cwd,
       status,
       updatedAt: label,
       group,
       model,
-      totalTokens: 0,
+      totalTokens,
       lastTimestamp: e.updated_at,
       hitLimit,
     };
@@ -221,25 +258,13 @@ function parseCodexTranscript(filePath: string, max = 150): SessionMessage[] {
 }
 
 export function readSessionDetail(id: string): SessionDetail | null {
-  if (!fs.existsSync(SESSION_INDEX)) return null;
-
-  // Find the index entry to learn the session date.
-  const indexLines = fs.readFileSync(SESSION_INDEX, "utf-8").split("\n").filter((l) => l.trim());
-  let entry: { id: string; thread_name: string; updated_at: string } | null = null;
-  for (const line of indexLines) {
-    try {
-      const e = JSON.parse(line);
-      if (e.id === id) entry = e;
-    } catch {
-      // skip
-    }
-  }
+  const entry = readIndexEntries().find((candidate) => candidate.id === id) ?? null;
   if (!entry) return null;
 
   const filePath = findSessionFile(id, entry.updated_at);
   if (!filePath) return null;
 
-  const meta = parseSessionFile(filePath);
+  const meta = parseCachedSessionFile(filePath);
   const transcript = parseCodexTranscript(filePath);
 
   const diff = Date.now() - new Date(entry.updated_at).getTime();
@@ -266,24 +291,22 @@ export function readSessionDetail(id: string): SessionDetail | null {
 }
 
 export function readUsage(days = 30): CodexUsage {
-  if (!fs.existsSync(SESSION_INDEX)) {
+  const entries = readIndexEntries();
+  if (entries.length === 0) {
     return { available: false, totalTokens: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, sessions: 0 };
   }
 
   const cutoff = Date.now() - days * 86_400_000;
-  const lines = fs.readFileSync(SESSION_INDEX, "utf-8").split("\n").filter((l) => l.trim());
-
   let totalTokens = 0, inputTokens = 0, outputTokens = 0, cachedTokens = 0, sessionCount = 0;
 
-  for (const line of lines) {
+  for (const entry of entries) {
     try {
-      const e = JSON.parse(line);
-      if (!e.updated_at || new Date(e.updated_at).getTime() < cutoff) continue;
+      if (new Date(entry.updated_at).getTime() < cutoff) continue;
 
-      const filePath = findSessionFile(e.id, e.updated_at);
+      const filePath = findSessionFile(entry.id, entry.updated_at);
       if (!filePath) continue;
 
-      const parsed = parseSessionFile(filePath);
+      const parsed = parseCachedSessionFile(filePath);
       if (parsed.totalTokens === 0) continue;
       totalTokens += parsed.totalTokens;
       inputTokens += parsed.inputTokens;

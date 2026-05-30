@@ -19,12 +19,13 @@ function accentStyle(hex: string): CSSProperties {
 }
 
 export default async function KanbanPage() {
-  const { tasks, source, dbPath } = await getKanbanTasks();
+  const { tasks, source, dbPath, boardSlug, resolution, reason } = await getKanbanTasks();
   const active = tasks.filter((t) => t.status !== "archived");
   const running = active.filter((t) => t.status === "running").length;
   const blocked = active.filter((t) => t.status === "blocked").length;
   const done = active.filter((t) => t.status === "done").length;
   const live = source === "live";
+  const degraded = source === "degraded";
 
   return (
     <div style={accentStyle(ACCENT)}>
@@ -39,11 +40,15 @@ export default async function KanbanPage() {
               className={
                 live
                   ? "flex items-center gap-1.5 rounded-full border border-ok/25 bg-ok/10 px-2 py-0.5 text-[11px] font-semibold text-ok"
+                  : degraded
+                    ? "flex items-center gap-1.5 rounded-full border border-warn/25 bg-warn/10 px-2 py-0.5 text-[11px] font-semibold text-warn"
                   : "flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted"
               }
             >
-              <span className={`size-1.5 rounded-full ${live ? "bg-ok animate-pulse" : "bg-faint"}`} />
-              {live ? "LIVE" : "DEMO"}
+              <span
+                className={`size-1.5 rounded-full ${live ? "bg-ok animate-pulse" : degraded ? "bg-warn" : "bg-faint"}`}
+              />
+              {live ? "LIVE" : degraded ? "DEGRADED" : "DEMO"}
             </span>
             <Stat label="Tasks" value={active.length} />
             <Stat label="Running" value={running} dot="#34d399" />
@@ -60,11 +65,19 @@ export default async function KanbanPage() {
         {live ? (
           <>
             Live · reading <code className="font-mono text-[var(--accent)]">{dbPath}</code> · archived hidden
+            {boardSlug ? ` · board ${boardSlug}` : ""}
+          </>
+        ) : degraded ? (
+          <>
+            Degraded · reading <code className="font-mono text-[var(--accent)]">{dbPath}</code> failed
+            {boardSlug ? ` · board ${boardSlug}` : ""} · {resolution}
+            {reason ? ` · ${reason}` : ""} · archived hidden
           </>
         ) : (
           <>
             Demo data · create <code className="font-mono text-[var(--accent)]">{dbPath}</code> (or set{" "}
             <code className="font-mono text-[var(--accent)]">HERMES_KANBAN_DB</code>) to go live · archived hidden
+            {reason ? ` · ${reason}` : ""}
           </>
         )}
       </p>

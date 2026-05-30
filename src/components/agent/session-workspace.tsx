@@ -69,8 +69,8 @@ function buildPanels(
               <span className="flex items-center gap-2 font-mono text-muted">
                 <Icon name="Plug" size={13} className="text-[var(--accent)]" /> {m}
               </span>
-              <span className="flex items-center gap-1.5 text-xs text-ok">
-                <span className="size-1.5 rounded-full bg-ok" /> connected
+              <span className="flex items-center gap-1.5 text-xs text-faint">
+                <span className="size-1.5 rounded-full bg-faint" /> unknown
               </span>
             </li>
           ),
@@ -81,8 +81,8 @@ function buildPanels(
       <div className="divide-y divide-line">
         <DetailRow label="Model">{detail.model ?? "—"}</DetailRow>
         <DetailRow label="Mode">Interactive</DetailRow>
-        <DetailRow label="Memory">Enabled</DetailRow>
-        <DetailRow label="MCP Servers">8 connected</DetailRow>
+        <DetailRow label="Session path">{detail.sandbox ?? "—"}</DetailRow>
+        <DetailRow label="MCP Runtime">Not detected</DetailRow>
       </div>
     );
   }
@@ -99,18 +99,8 @@ function buildPanels(
       <Placeholder icon="FileText" text="No changes" />
     );
     panels.tests = (
-      <div className="space-y-1.5 font-mono text-[12.5px]">
-        <div className="flex items-center gap-2 text-ok">
-          <Icon name="CircleCheck" size={14} /> auth.test.ts — 18 passed
-        </div>
-        <div className="flex items-center gap-2 text-ok">
-          <Icon name="CircleCheck" size={14} /> providers.test.ts — 14 passed
-        </div>
-        <div className="flex items-center gap-2 text-ok">
-          <Icon name="CircleCheck" size={14} /> callbacks.test.ts — 10 passed
-        </div>
-        <div className="mt-2 text-muted">Test Suites: 3 passed, 3 total</div>
-        <div className="text-ok">Tests: 42 passed, 42 total (100%)</div>
+      <div className="rounded-lg border border-line bg-surface-2 px-3 py-4 text-sm text-muted">
+        Test results are not collected from the live Codex transcripts on this host.
       </div>
     );
     panels.logs = terminalNode;
@@ -258,7 +248,25 @@ export function SessionWorkspace({
       setSelectedId(id);
       setLive(false); // browsing history exits the live session
       setMenuOpen(false);
-      if (!realData) return; // obsidian: note switch is local (no fetch)
+      if (!realData) {
+        if (agentId === "obsidian") {
+          const note = notes?.find((entry) => entry.id === id);
+          const session = initialSessions.find((entry) => entry.id === id);
+          if (note) {
+            setDetail({
+              id: note.id,
+              agentId: "obsidian",
+              title: note.title,
+              workspace: note.group,
+              status: "completed",
+              updatedAt: session?.updatedAt ?? detail.updatedAt,
+              group: session?.group ?? note.group,
+              transcript: [{ role: "agent", kind: "output", text: note.body }],
+            });
+          }
+        }
+        return;
+      }
       setLoading(true);
       try {
         const endpoint =
@@ -276,7 +284,7 @@ export function SessionWorkspace({
         setLoading(false);
       }
     },
-    [selectedId, agentId, realData],
+    [selectedId, agentId, detail.updatedAt, initialSessions, notes, realData],
   );
 
   const prompt = `${agentId}@${detail.workspace ?? "agentic-os"}:~$`;

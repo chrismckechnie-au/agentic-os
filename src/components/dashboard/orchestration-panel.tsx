@@ -1,25 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icon";
 import { AGENTS } from "@/lib/config/agents";
 import type { AgentSummary } from "@/lib/types";
-
-function useLive(base: number, amp: number, ms = 2200) {
-  const [v, setV] = useState(base);
-  useEffect(() => {
-    const id = setInterval(
-      () =>
-        setV(
-          Math.max(0, Math.min(100, Math.round((base + (Math.random() - 0.5) * amp) * 10) / 10)),
-        ),
-      ms,
-    );
-    return () => clearInterval(id);
-  }, [base, amp, ms]);
-  return v;
-}
 
 const STATUS_MAP: Record<string, { label: string; dotColor: string; bg: string; border: string; text: string }> = {
   running:  { label: "Running",  dotColor: "#34d399", bg: "color-mix(in srgb,#34d399 13%,transparent)", border: "color-mix(in srgb,#34d399 26%,transparent)", text: "#34d399" },
@@ -66,8 +50,8 @@ function MeterBar({ pct, color }: { pct: number; color: string }) {
 function AgentRow({ agent }: { agent: AgentSummary }) {
   const cfg = AGENTS[agent.id];
   const live = agent.status === "running";
-  const cpu = useLive(agent.cpu ?? 20, 8);
-  const mem = useLive(agent.mem ?? 40, 5);
+  const cpu = agent.cpu;
+  const mem = agent.mem;
 
   return (
     <Link
@@ -117,13 +101,29 @@ function AgentRow({ agent }: { agent: AgentSummary }) {
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
           <span className="w-6 text-[9px] font-semibold uppercase tracking-wider text-faint">CPU</span>
-          <div className="flex-1"><MeterBar pct={cpu} color={cfg.accent} /></div>
-          <span className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted">{Math.round(cpu)}%</span>
+          <div className="flex-1">
+            {typeof cpu === "number" ? (
+              <MeterBar pct={cpu} color={cfg.accent} />
+            ) : (
+              <div className="h-[5px] rounded-full bg-white/[0.07]" />
+            )}
+          </div>
+          <span className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted">
+            {typeof cpu === "number" ? `${Math.round(cpu)}%` : "—"}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-6 text-[9px] font-semibold uppercase tracking-wider text-faint">MEM</span>
-          <div className="flex-1"><MeterBar pct={mem} color="#9aa1ad" /></div>
-          <span className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted">{Math.round(mem)}%</span>
+          <div className="flex-1">
+            {typeof mem === "number" ? (
+              <MeterBar pct={mem} color="#9aa1ad" />
+            ) : (
+              <div className="h-[5px] rounded-full bg-white/[0.07]" />
+            )}
+          </div>
+          <span className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted">
+            {typeof mem === "number" ? `${Math.round(mem)}%` : "—"}
+          </span>
         </div>
       </div>
     </Link>

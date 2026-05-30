@@ -17,11 +17,13 @@ import pty from "node-pty";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3017", 10);
-const hostname = process.env.HOSTNAME || "127.0.0.1";
+const hostname = process.env.AGENTIC_HOST || "127.0.0.1";
 const isWin = process.platform === "win32";
 
 const app = next({ dev });
 const handle = app.getRequestHandler();
+const packageJson = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
+const runRouteEnabled = /^(1|true)$/i.test(process.env.AGENTIC_ENABLE_RUN_ROUTE ?? "");
 
 // ── Agent allowlist (authoritative — never trust the client) ────────────────
 // Each agent maps to a fixed binary + base args. `resume(id)` appends history flags.
@@ -31,29 +33,140 @@ const AGENTS = {
   hermes: { bin: "hermes", base: ["--tui"], resume: (id) => ["--resume", id] },
 };
 
-// cwd allowlist roots — a client-supplied cwd must resolve under one of these.
-const ALLOWED_ROOTS = [
+function splitRoots(value) {
+  return value ? value.split(path.delimiter).map((root) => root.trim()).filter(Boolean) : [];
+}
+
+function buildAllowedRoots(roots) {
+  return roots
+    .map((root) => {
+    try {
+      return fs.realpathSync(path.resolve(root));
+    } catch {
+      return null;
+    }
+  })
+    .filter(Boolean);
+}
+
+// PTY cwd allowlist roots. Keep execution narrower than read-only app data roots.
+const PTY_ALLOWED_ROOTS = buildAllowedRoots([
   process.cwd(),
-  os.homedir(),
-  ...(isWin ? ["F:\\Development"] : ["/home", "/Users"]),
-  ...(process.env.AGENTIC_ALLOWED_ROOTS
-    ? process.env.AGENTIC_ALLOWED_ROOTS.split(path.delimiter).filter(Boolean)
-    : []),
-];
+  ...splitRoots(process.env.AGENTIC_PTY_ALLOWED_ROOTS),
+]);
+
+function withinRoot(target, root) {
+  const relative = path.relative(root, target);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
 
 function resolveCwd(requested) {
-  const fallback = process.cwd();
-  if (!requested) return fallback;
+  if (!requested) return { ok: true, cwd: process.cwd() };
   try {
-    const resolved = path.resolve(requested);
-    const ok = ALLOWED_ROOTS.some((root) =>
-      resolved.toLowerCase().startsWith(path.resolve(root).toLowerCase()),
-    );
-    if (ok && fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) return resolved;
+    const resolved = fs.realpathSync(path.resolve(requested));
+    const ok = PTY_ALLOWED_ROOTS.some((root) => withinRoot(resolved, root));
+    if (ok && fs.statSync(resolved).isDirectory()) return { ok: true, cwd: resolved };
   } catch {
     /* fall through */
   }
-  return fallback;
+  return {
+    ok: false,
+    cwd: process.cwd(),
+    message: "Requested workspace is not allowed for live PTY sessions.",
+  };
+}
+
+function fileExists(target) {
+  try {
+    return fs.statSync(target).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function dirExists(target) {
+  try {
+    return fs.statSync(target).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function resolveKanbanForHealth() {
+  const home = process.env.HERMES_HOME || path.join(os.homedir(), ".hermes");
+  const explicitDb = process.env.HERMES_KANBAN_DB?.trim();
+  if (explicitDb) {
+    return { dbPath: explicitDb, resolution: "env-db" };
+  }
+
+  const boardFromEnv = process.env.HERMES_KANBAN_BOARD?.trim();
+  if (boardFromEnv) {
+    return {
+      dbPath: path.join(home, "kanban", "boards", boardFromEnv, "kanban.db"),
+      boardSlug: boardFromEnv,
+      resolution: "env-board",
+    };
+  }
+
+  const currentFile = path.join(home, "kanban", "current");
+  try {
+    const current = fs.readFileSync(currentFile, "utf-8").trim();
+    if (current) {
+      return {
+        dbPath: path.join(home, "kanban", "boards", current, "kanban.db"),
+        boardSlug: current,
+        resolution: "current-board",
+      };
+    }
+  } catch {
+    /* fall through */
+  }
+
+  const defaultBoard = path.join(home, "kanban", "boards", "default", "kanban.db");
+  if (fileExists(defaultBoard)) {
+    return { dbPath: defaultBoard, boardSlug: "default", resolution: "default-board" };
+  }
+
+  return { dbPath: path.join(home, "kanban.db"), resolution: "legacy-db" };
+}
+
+function healthPayload() {
+  const runtimeMajor = Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10);
+  const runtimeOk = Number.isFinite(runtimeMajor) && runtimeMajor >= 22;
+  const loopbackHost = ["127.0.0.1", "localhost", "::1", "[::1]"].includes(hostname);
+  const vaultPath = process.env.VAULT_PATH?.trim() || null;
+  const kanban = resolveKanbanForHealth();
+
+  const checks = {
+    runtime: { ok: runtimeOk, detail: process.version },
+    bindHost: { ok: loopbackHost, detail: hostname },
+    vault: { ok: vaultPath ? dirExists(vaultPath) : null, path: vaultPath },
+    kanban: {
+      ok: fileExists(kanban.dbPath),
+      path: kanban.dbPath,
+      boardSlug: kanban.boardSlug ?? null,
+      resolution: kanban.resolution,
+    },
+  };
+
+  return {
+    ok: checks.runtime.ok && checks.bindHost.ok,
+    version: packageJson.version,
+    runtime: process.version,
+    dataSourceMode: process.env.DATA_SOURCE ?? "mock",
+    host: hostname,
+    runRouteEnabled,
+    timestamp: new Date().toISOString(),
+    checks,
+  };
+}
+
+function sendHealth(res) {
+  const payload = healthPayload();
+  res.statusCode = payload.ok ? 200 : 503;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.end(JSON.stringify(payload));
 }
 
 // Resolve a binary to an absolute path via the OS, or null if not installed.
@@ -80,14 +193,12 @@ function safeResumeId(id) {
   return typeof id === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(id) ? id : null;
 }
 
-// Same-origin guard: the page and the socket must share an origin. Also permit
-// loopback explicitly. Blocks cross-site WebSocket hijacking.
+// Same-origin guard: the page and the socket must share an origin.
 function originAllowed(req) {
   const origin = req.headers.origin;
-  if (!origin) return true; // non-browser client
+  if (!origin || !req.headers.host) return false;
   try {
     const o = new URL(origin);
-    if (["localhost", "127.0.0.1", "::1", "[::1]"].includes(o.hostname)) return true;
     return o.host === req.headers.host;
   } catch {
     return false;
@@ -123,7 +234,13 @@ function startPtySession(ws, params) {
     return;
   }
 
-  const cwd = resolveCwd(params.get("cwd") || undefined);
+  const cwdResult = resolveCwd(params.get("cwd") || undefined);
+  if (!cwdResult.ok) {
+    term(cwdResult.message);
+    ws.close();
+    return;
+  }
+  const cwd = cwdResult.cwd;
   const resumeId = safeResumeId(params.get("resume"));
   const cols = Math.max(20, Math.min(500, parseInt(params.get("cols") || "80", 10) || 80));
   const rows = Math.max(5, Math.min(200, parseInt(params.get("rows") || "24", 10) || 24));
@@ -201,7 +318,14 @@ function startPtySession(ws, params) {
 
 app.prepare().then(() => {
   const upgradeHandler = app.getUpgradeHandler(); // Next's own upgrade (HMR, etc.) — must be after prepare()
-  const server = createServer((req, res) => handle(req, res));
+  const server = createServer((req, res) => {
+    const { pathname } = new URL(req.url ?? "/", `http://${req.headers.host ?? `localhost:${port}`}`);
+    if (pathname === "/api/health") {
+      sendHealth(res);
+      return;
+    }
+    handle(req, res);
+  });
 
   const wss = new WebSocketServer({ noServer: true });
   wss.on("connection", (ws, req) => {

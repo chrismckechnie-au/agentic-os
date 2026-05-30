@@ -7,10 +7,29 @@ import type { KanbanTask, TaskStatus } from "@/lib/types";
 
 // node:sqlite requires Node ≥ 22. On older runtimes we degrade gracefully.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function loadSqlite(): any | null {
+  try {
+    const builtinLoader = (
+      process as NodeJS.Process & {
+        getBuiltinModule?: (id: string) => unknown;
+      }
+    ).getBuiltinModule;
+    if (typeof builtinLoader === "function") {
+      return builtinLoader("node:sqlite");
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("node:sqlite");
+  } catch {
+    return null;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tryOpenDb(dbPath: string): any | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-    const { DatabaseSync } = require("node:sqlite") as any;
+    const sqlite = loadSqlite();
+    const DatabaseSync = sqlite?.DatabaseSync;
+    if (!DatabaseSync) return null;
     return new DatabaseSync(dbPath, { readOnly: true });
   } catch {
     return null;
@@ -33,9 +52,56 @@ const VALID_STATUSES: TaskStatus[] = [
   "archived",
 ];
 
-/** Resolve the kanban.db path: $HERMES_KANBAN_DB or ~/.hermes/kanban.db. */
+export interface KanbanDbResolution {
+  dbPath: string;
+  boardSlug?: string;
+  resolution: "env-db" | "env-board" | "current-board" | "default-board" | "legacy-db";
+  reason?: string;
+}
+
+function hermesHome(): string {
+  return process.env.HERMES_HOME || path.join(/* turbopackIgnore: true */ os.homedir(), ".hermes");
+}
+
+function boardDbPath(slug: string): string {
+  return path.join(hermesHome(), "kanban", "boards", slug, "kanban.db");
+}
+
+/** Resolve the kanban DB using Hermes' active-board precedence. */
+export function resolveDb(): KanbanDbResolution {
+  const explicit = process.env.HERMES_KANBAN_DB?.trim();
+  if (explicit) return { dbPath: explicit, resolution: "env-db" };
+
+  const boardFromEnv = process.env.HERMES_KANBAN_BOARD?.trim();
+  if (boardFromEnv) {
+    return { dbPath: boardDbPath(boardFromEnv), boardSlug: boardFromEnv, resolution: "env-board" };
+  }
+
+  const currentFile = path.join(hermesHome(), "kanban", "current");
+  try {
+    const current = fs.readFileSync(currentFile, "utf-8").trim();
+    if (current) {
+      return { dbPath: boardDbPath(current), boardSlug: current, resolution: "current-board" };
+    }
+  } catch {
+    // fall through
+  }
+
+  const defaultDb = boardDbPath("default");
+  if (dbExists(defaultDb)) {
+    return { dbPath: defaultDb, boardSlug: "default", resolution: "default-board" };
+  }
+
+  return {
+    dbPath: path.join(hermesHome(), "kanban.db"),
+    resolution: "legacy-db",
+    reason: "No active Hermes board found; using legacy ~/.hermes/kanban.db",
+  };
+}
+
+/** Resolve the kanban.db path; prefer resolveDb() when source details matter. */
 export function resolveDbPath(): string {
-  return process.env.HERMES_KANBAN_DB || path.join(os.homedir(), ".hermes", "kanban.db");
+  return resolveDb().dbPath;
 }
 
 export function dbExists(dbPath = resolveDbPath()): boolean {
@@ -43,6 +109,33 @@ export function dbExists(dbPath = resolveDbPath()): boolean {
     return fs.statSync(dbPath).isFile();
   } catch {
     return false;
+  }
+}
+
+export function getDbHealth(dbPath = resolveDbPath()): {
+  available: boolean;
+  readable: boolean;
+  dbPath: string;
+  reason?: string;
+} {
+  if (!dbExists(dbPath)) {
+    return { available: false, readable: false, dbPath };
+  }
+
+  const db = tryOpenDb(dbPath);
+  if (!db) {
+    return {
+      available: true,
+      readable: false,
+      dbPath,
+      reason: "node:sqlite is unavailable; run the service on Node 22+",
+    };
+  }
+
+  try {
+    return { available: true, readable: true, dbPath };
+  } finally {
+    db.close();
   }
 }
 
@@ -126,7 +219,9 @@ function depCounts(db: any): Map<string, number> {
  */
 export function readTasks(dbPath = resolveDbPath()): KanbanTask[] {
   const db = tryOpenDb(dbPath);
-  if (!db) return [];
+  if (!db) {
+    throw new Error("node:sqlite is unavailable; run the service on Node 22+");
+  }
   try {
     const deps = depCounts(db);
     const rows = db

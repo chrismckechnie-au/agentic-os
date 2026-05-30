@@ -20,6 +20,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ agent: 
   if (!prompt?.trim()) {
     return NextResponse.json({ error: "Missing prompt" }, { status: 400 });
   }
-  const result = await getProvider().createSession(agent, prompt);
-  return NextResponse.json(result, { status: 201 });
+  try {
+    const result = await getProvider().createSession(agent, prompt);
+    return NextResponse.json(result, { status: 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to create session";
+    const status = /not enabled|disabled/i.test(message) ? 501 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
 }

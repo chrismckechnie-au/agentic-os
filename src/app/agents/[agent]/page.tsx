@@ -4,32 +4,21 @@ import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
 import { getProvider } from "@/lib/providers";
 import { AGENT_ORDER, AGENTS, isAgentId } from "@/lib/config/agents";
-import type { AgentId } from "@/lib/types";
+import type { AgentId, SessionDetail } from "@/lib/types";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { SessionWorkspace } from "@/components/agent/session-workspace";
 import {
-  readSessions as readClaudeSessions,
   readSessionDetail as readClaudeDetail,
 } from "@/lib/claude-code/reader";
 import {
-  readSessions as readCodexSessions,
   readSessionDetail as readCodexDetail,
 } from "@/lib/codex/reader";
-import { readNotes, readVaultStats } from "@/lib/obsidian/reader";
+import { readVaultStats } from "@/lib/obsidian/reader";
 import {
-  hermesAvailable,
-  readJobs as readHermesJobs,
-  readSkills as readHermesSkills,
-  readMemory as readHermesMemory,
-} from "@/lib/hermes/reader";
-import {
-  stateDbExists as hermesStateDbExists,
-  readSessions as readHermesSessions,
   readSessionDetail as readHermesDetail,
 } from "@/lib/hermes/state";
-import type { Note, Session, SessionDetail } from "@/lib/types";
-import { buildClaudeStats, buildCodexStats, buildHermesStats } from "@/lib/agents/stats";
+import { noteToDetail } from "@/lib/providers/live/obsidian";
 
 export function generateStaticParams() {
   return AGENT_ORDER.map((agent) => ({ agent }));
@@ -58,100 +47,42 @@ export default async function AgentPage({
   const cfg = AGENTS[agent];
   let initialDetail: SessionDetail = data.activeSession;
 
-  if (agent === "claude-code") {
-    const real = readClaudeSessions(100);
-    if (real.length > 0) {
-      data.sessions = real.map((s): Session => ({
-        id: s.id,
-        agentId: "claude-code",
-        title: s.title,
-        workspace: s.workspace,
-        status: s.status,
-        updatedAt: s.updatedAt,
-        group: s.group,
-      }));
-      const detailId = reqSession && real.some((r) => r.id === reqSession) ? reqSession : real[0].id;
-      const d = readClaudeDetail(detailId);
-      if (d) initialDetail = d;
-    }
-  }
-
-  if (agent === "codex") {
-    const real = readCodexSessions(100);
-    if (real.length > 0) {
-      data.sessions = real.map((s): Session => ({
-        id: s.id,
-        agentId: "codex",
-        title: s.title,
-        workspace: s.workspace ?? undefined,
-        status: s.status,
-        updatedAt: s.updatedAt,
-        group: s.group,
-      }));
-      const detailId = reqSession && real.some((r) => r.id === reqSession) ? reqSession : real[0].id;
-      const d = readCodexDetail(detailId);
-      if (d) initialDetail = d;
-    }
-  }
-
   let vaultStats: { notes: number; links: number; vaultName: string } | undefined;
   if (agent === "obsidian") {
-    const notes = readNotes(200);
-    if (notes.length > 0) {
-      data.notes = notes;
+    if (data.notes && data.notes.length > 0) {
       vaultStats = readVaultStats();
-      // Notes drive the left rail; selecting one renders it (no fetch — notes are loaded).
-      data.sessions = notes.map((n: Note): Session => ({
-        id: n.id,
-        agentId: "obsidian",
-        title: n.title,
-        updatedAt: n.updatedAt,
-        group: n.group,
-        status: "completed",
-      }));
-      initialDetail = { ...initialDetail, id: notes[0].id };
+      const selectedNote = reqSession
+        ? data.notes.find((note) => note.id === reqSession) ?? data.notes[0]
+        : data.notes[0];
+      initialDetail = noteToDetail(selectedNote);
     }
   }
 
-  let hermesRealSessions = false;
-  if (agent === "hermes") {
-    if (hermesAvailable()) {
-      const jobs = readHermesJobs();
-      const skills = readHermesSkills();
-      const memory = readHermesMemory();
-      if (jobs.length > 0) data.jobs = jobs;
-      if (skills.length > 0) data.skills = skills;
-      if (memory.length > 0) data.memory = memory;
-    }
-    if (hermesStateDbExists()) {
-      const real = readHermesSessions(100);
-      if (real.length > 0) {
-        hermesRealSessions = true;
-        data.sessions = real;
-        const detailId = reqSession && real.some((r) => r.id === reqSession) ? reqSession : real[0].id;
-        const d = readHermesDetail(detailId);
-        if (d) initialDetail = d;
-      }
-    }
+  if (agent === "claude-code" && reqSession) {
+    const detail = readClaudeDetail(reqSession);
+    if (detail) initialDetail = detail;
   }
 
-  const realData =
-    agent === "claude-code" || agent === "codex" || (agent === "hermes" && hermesRealSessions);
-  const liveAgent = Boolean(cfg.liveCli);
+  if (agent === "codex" && reqSession) {
+    const detail = readCodexDetail(reqSession);
+    if (detail) initialDetail = detail;
+  }
+
+  if (agent === "hermes" && reqSession) {
+    const detail = readHermesDetail(reqSession);
+    if (detail) initialDetail = detail;
+  }
+
+  const realData = agent !== "obsidian";
+  const liveAgent = data.agent.liveCliAvailable;
   const autoStartLive = isNew === "1" && liveAgent;
-  const hermesStats = agent === "hermes" ? buildHermesStats() : [];
-  const stats =
-    agent === "claude-code" ? buildClaudeStats() :
-    agent === "codex"       ? buildCodexStats() :
-    agent === "hermes" && hermesStats.length > 0 ? hermesStats :
-    data.stats;
 
   return (
     <div style={accentStyle(cfg.accent)}>
       <PageHeader title={cfg.name} subtitle={cfg.tagline} icon={cfg.icon} accent={cfg.accent} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {stats.map((stat) => (
+        {data.stats.map((stat) => (
           <StatCard key={stat.id} stat={stat} />
         ))}
       </div>

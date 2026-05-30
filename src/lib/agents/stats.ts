@@ -1,9 +1,10 @@
 // Server-only. Derives real StatMetric[] for claude-code, codex and hermes from local readers.
 import type { StatMetric } from "@/lib/types";
-import { readSessions as readClaudeSessions } from "@/lib/claude-code/reader";
-import { readSessions as readCodexSessions } from "@/lib/codex/reader";
+import { readSessions as readClaudeSessions, type ClaudeSession } from "@/lib/claude-code/reader";
+import { readSessions as readCodexSessions, type CodexSession } from "@/lib/codex/reader";
 import { readUserConfig, resolvedBudgets } from "@/lib/config/user-config";
 import { hermesAvailable, readJobs, readSkills, readMemory } from "@/lib/hermes/reader";
+import { readNotes, readVaultStats } from "@/lib/obsidian/reader";
 
 function fmtTok(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -18,8 +19,8 @@ function remainHint(used: number, budget: number): string {
   return `${rem}% remaining of ${fmtTok(budget)}/mo budget`;
 }
 
-export function buildClaudeStats(): StatMetric[] {
-  const sessions = (() => { try { return readClaudeSessions(200); } catch { return []; } })();
+export function buildClaudeStats(sessions?: ClaudeSession[]): StatMetric[] {
+  sessions ??= (() => { try { return readClaudeSessions(200); } catch { return []; } })();
   const budget = (() => { try { return resolvedBudgets(readUserConfig())["claude-code"]; } catch { return 0; } })();
 
   const active    = sessions.filter((s) => s.status === "active").length;
@@ -54,17 +55,17 @@ export function buildClaudeStats(): StatMetric[] {
     },
     {
       id: "cc-mcp",
-      label: "MCP Connections",
-      value: "8",
-      hint: "All systems operational",
+      label: "Runtime Inventory",
+      value: "—",
+      hint: "MCP process inventory is not collected on this host",
       icon: "Plug",
-      spark: [8, 8, 7, 8, 8, 8, 8],
+      spark: [0, 0, 0, 0, 0, 0, 0],
     },
   ];
 }
 
-export function buildCodexStats(): StatMetric[] {
-  const sessions = (() => { try { return readCodexSessions(200); } catch { return []; } })();
+export function buildCodexStats(sessions?: CodexSession[]): StatMetric[] {
+  sessions ??= (() => { try { return readCodexSessions(200); } catch { return []; } })();
   const budget = (() => { try { return resolvedBudgets(readUserConfig()).codex; } catch { return 0; } })();
 
   const active    = sessions.filter((s) => s.status === "active" || s.status === "in_progress").length;
@@ -159,6 +160,64 @@ export function buildHermesStats(): StatMetric[] {
       hint: finished.length > 0 ? `${succeeded}/${finished.length} runs` : "No completed runs",
       icon: "Target",
       spark: [0, 0, 0, 0, 0, 0, successRate ?? 0],
+    },
+  ];
+}
+
+export function buildObsidianStats(): StatMetric[] {
+  const notes = (() => {
+    try {
+      return readNotes(200);
+    } catch {
+      return [];
+    }
+  })();
+  const vault = (() => {
+    try {
+      return readVaultStats();
+    } catch {
+      return { notes: 0, links: 0, vaultName: "—" };
+    }
+  })();
+
+  const updatedToday = notes.filter((note) => {
+    const timestamp = new Date(note.updatedAt).getTime();
+    if (!Number.isFinite(timestamp)) return false;
+    return Date.now() - timestamp < 86_400_000;
+  }).length;
+
+  return [
+    {
+      id: "ob-notes",
+      label: "Notes",
+      value: vault.notes.toLocaleString(),
+      hint: vault.vaultName === "—" ? "Vault path unavailable" : vault.vaultName,
+      icon: "FileText",
+      spark: [0, 0, 0, 0, 0, 0, vault.notes],
+    },
+    {
+      id: "ob-links",
+      label: "Backlinks",
+      value: vault.links.toLocaleString(),
+      hint: `${updatedToday} updated in the last 24h`,
+      icon: "Link2",
+      spark: [0, 0, 0, 0, 0, 0, vault.links],
+    },
+    {
+      id: "ob-recent",
+      label: "Recent Notes",
+      value: String(notes.length),
+      hint: "Bounded to the live note cache",
+      icon: "Clock3",
+      spark: [0, 0, 0, 0, 0, 0, notes.length],
+    },
+    {
+      id: "ob-status",
+      label: "Vault Status",
+      value: vault.vaultName === "—" ? "Missing" : "Available",
+      hint: vault.vaultName === "—" ? "Set VAULT_PATH on the host" : `Vault ${vault.vaultName}`,
+      icon: "Hexagon",
+      spark: [0, 0, 0, 0, 0, 0, vault.vaultName === "—" ? 0 : 1],
     },
   ];
 }

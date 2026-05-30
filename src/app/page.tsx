@@ -1,9 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { buildAgentSummaries } from "@/lib/agents/detect";
-import { buildOverviewStats, buildRecentSessions, buildSystemHealth, buildWorkspaces } from "@/lib/overview/real";
-import { buildActivity } from "@/lib/activity/real";
+import { getProvider } from "@/lib/providers";
 import { OverviewActions } from "@/components/dashboard/overview-actions";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -15,12 +13,18 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/icon";
 
 export default async function OverviewPage() {
-  const agents = buildAgentSummaries();
-  const stats = buildOverviewStats(agents);
-  const health = buildSystemHealth(agents);
-  const workspaces = buildWorkspaces();
-  const recentSessions = buildRecentSessions();
-  const activity = buildActivity(6);
+  const data = await getProvider().getOverview();
+  const degraded = data.health.some((item) => item.status === "degraded" || item.status === "down");
+  const allDown = data.health.length > 0 && data.health.every((item) => item.status === "down");
+  const healthLabel = allDown ? "Unavailable" : degraded ? "Degraded" : "Healthy";
+  const healthTone =
+    allDown ? "text-danger"
+    : degraded ? "text-warn"
+    : "text-ok";
+  const healthDot =
+    allDown ? "bg-danger"
+    : degraded ? "bg-warn"
+    : "bg-ok";
 
   return (
     <>
@@ -28,19 +32,19 @@ export default async function OverviewPage() {
         title="Overview"
         subtitle="Monitor agents, sessions, and system health at a glance."
         icon="LayoutGrid"
-        right={<OverviewActions />}
+        right={<OverviewActions agents={data.agents} />}
       />
 
       {/* 5-col stat grid */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-5">
-        {stats.map((s) => (
+        {data.stats.map((s) => (
           <StatCard key={s.id} stat={s} />
         ))}
       </div>
 
       {/* Orchestration + Activity */}
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
-        <OrchestrationPanel agents={agents} />
+        <OrchestrationPanel agents={data.agents} />
 
         <div className="panel">
           <div className="flex items-center justify-between gap-3 px-5 py-4">
@@ -53,7 +57,7 @@ export default async function OverviewPage() {
             </Link>
           </div>
           <div className="px-5 pb-5 pt-0">
-            <ActivityFeed items={activity} />
+            <ActivityFeed items={data.activity} />
           </div>
         </div>
       </div>
@@ -70,19 +74,19 @@ export default async function OverviewPage() {
               All sessions <Icon name="ArrowRight" size={12} />
             </Link>
           </div>
-          <SessionsTable sessions={recentSessions} />
+          <SessionsTable sessions={data.recentSessions} />
         </div>
 
         <div className="flex flex-col gap-4">
           <Card>
             <CardHeader>
               <CardTitle>System Health</CardTitle>
-              <span className="flex items-center gap-1.5 text-xs font-medium text-ok">
-                <span className="h-1.5 w-1.5 rounded-full bg-ok" /> Operational
+              <span className={`flex items-center gap-1.5 text-xs font-medium ${healthTone}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${healthDot}`} /> {healthLabel}
               </span>
             </CardHeader>
             <CardBody className="pt-0">
-              <HealthList items={health.slice(0, 6)} />
+              <HealthList items={data.health.slice(0, 6)} />
             </CardBody>
           </Card>
 
@@ -95,7 +99,7 @@ export default async function OverviewPage() {
             </CardHeader>
             <CardBody className="pt-0">
               <ul className="divide-y divide-line">
-                {workspaces.slice(0, 5).map((w) => (
+                {data.workspaces.slice(0, 5).map((w) => (
                   <li key={w.name} className="flex items-center justify-between py-2.5 text-sm">
                     <span className="flex items-center gap-2.5">
                       <Icon name="FolderGit2" size={15} className="text-muted" />

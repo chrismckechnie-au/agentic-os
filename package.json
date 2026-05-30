@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
+    "check:runtime": "node scripts/check-runtime.mjs",
+    "prebuild": "node scripts/check-runtime.mjs",
     "dev": "node server.mjs",
     "build": "next build",
+    "prestart": "node scripts/check-runtime.mjs",
     "start": "cross-env NODE_ENV=production node server.mjs",
     "lint": "eslint"
   },
