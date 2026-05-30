@@ -1,0 +1,23 @@
+name: Deploy to Ubuntu
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to box
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 192.168.50.105
+          username: chris
+          key: ${{ secrets.UBUNTU_SSH_KEY }}
+          script: |
+            cd ~/agentic-os
+            git pull
+            npm install --prefer-offline
+            npm run build
+            systemctl --user restart agentic-os
+            systemctl --user is-active agentic-os
