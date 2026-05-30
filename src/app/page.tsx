@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { getProvider } from "@/lib/providers";
 import { buildAgentSummaries } from "@/lib/agents/detect";
-import { buildOverviewStats, buildRecentSessions } from "@/lib/overview/real";
+import { buildOverviewStats, buildRecentSessions, buildSystemHealth, buildWorkspaces } from "@/lib/overview/real";
 import { buildActivity } from "@/lib/activity/real";
 import { OverviewActions } from "@/components/dashboard/overview-actions";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -14,9 +13,10 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/icon";
 
 export default async function OverviewPage() {
-  const data = await getProvider().getOverview();
   const agents = buildAgentSummaries();
   const stats = buildOverviewStats(agents);
+  const health = buildSystemHealth(agents);
+  const workspaces = buildWorkspaces();
   const recentSessions = buildRecentSessions();
   const activity = buildActivity(6);
 
@@ -80,7 +80,7 @@ export default async function OverviewPage() {
               </span>
             </CardHeader>
             <CardBody className="pt-0">
-              <HealthList items={data.health.slice(0, 6)} />
+              <HealthList items={health.slice(0, 6)} />
             </CardBody>
           </Card>
 
@@ -93,7 +93,7 @@ export default async function OverviewPage() {
             </CardHeader>
             <CardBody className="pt-0">
               <ul className="divide-y divide-line">
-                {data.workspaces.slice(0, 5).map((w) => (
+                {workspaces.slice(0, 5).map((w) => (
                   <li key={w.name} className="flex items-center justify-between py-2.5 text-sm">
                     <span className="flex items-center gap-2.5">
                       <Icon name="FolderGit2" size={15} className="text-muted" />

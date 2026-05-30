@@ -1,7 +1,8 @@
-// Server-only. Derives a real activity / notification feed from local Claude + Codex sessions.
+// Server-only. Derives a real activity / notification feed from local Claude + Codex + Hermes sessions.
 import type { ActivityItem } from "@/lib/types";
 import { readSessions as readClaudeSessions } from "@/lib/claude-code/reader";
 import { readSessions as readCodexSessions } from "@/lib/codex/reader";
+import { readSessions as readHermesSessions, stateDbExists } from "@/lib/hermes/state";
 
 // Recency weight for the "Xm ago" / "Xh ago" / "just now" labels the readers emit.
 function weight(u: string): number {
@@ -20,8 +21,9 @@ function statusIcon(status: string): string {
 }
 
 export function buildActivity(limit = 8): ActivityItem[] {
-  const claude = (() => { try { return readClaudeSessions(15); } catch { return []; } })();
-  const codex  = (() => { try { return readCodexSessions(15); } catch { return []; } })();
+  const claude  = (() => { try { return readClaudeSessions(15); } catch { return []; } })();
+  const codex   = (() => { try { return readCodexSessions(15); } catch { return []; } })();
+  const hermes  = stateDbExists() ? (() => { try { return readHermesSessions(15); } catch { return []; } })() : [];
 
   const items: ActivityItem[] = [
     ...claude.map((s) => ({
@@ -37,6 +39,13 @@ export function buildActivity(limit = 8): ActivityItem[] {
       text: `Codex — ${s.title}`,
       when: s.updatedAt,
       agentId: "codex" as const,
+    })),
+    ...hermes.map((s) => ({
+      id: `hm-${s.id}`,
+      icon: statusIcon(s.status),
+      text: `Hermes — ${s.title}`,
+      when: s.updatedAt,
+      agentId: "hermes" as const,
     })),
   ];
 

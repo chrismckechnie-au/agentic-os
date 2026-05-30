@@ -1,5 +1,5 @@
 // Server-only. Derives real Overview stats and recent sessions from local readers.
-import type { Session, StatMetric } from "@/lib/types";
+import type { Session, StatMetric, HealthItem, WorkspaceSummary } from "@/lib/types";
 import type { AgentSummary } from "@/lib/types";
 import { readSessions as readClaudeSessions } from "@/lib/claude-code/reader";
 import { readSessions as readCodexSessions } from "@/lib/codex/reader";
@@ -54,6 +54,41 @@ export function buildOverviewStats(agents: AgentSummary[]): StatMetric[] {
       spark: [Math.max(0, workspaces - 2), workspaces - 1, workspaces - 1, workspaces, workspaces, workspaces, workspaces],
     },
   ];
+}
+
+export function buildSystemHealth(agents: AgentSummary[]): HealthItem[] {
+  const toHealth = (s: AgentSummary["status"]): HealthItem["status"] => {
+    if (s === "running") return "running";
+    if (s === "online") return "healthy";
+    if (s === "degraded") return "degraded";
+    return "down";
+  };
+  return agents.map((a) => ({
+    label: a.name,
+    status: toHealth(a.status),
+    detail: a.currentTask ?? a.status,
+  }));
+}
+
+export function buildWorkspaces(): WorkspaceSummary[] {
+  const claude = (() => { try { return readClaudeSessions(200); } catch { return []; } })();
+  const codex  = (() => { try { return readCodexSessions(200); } catch { return []; } })();
+
+  const map = new Map<string, Set<string>>();
+  for (const s of claude) {
+    if (!s.workspace) continue;
+    if (!map.has(s.workspace)) map.set(s.workspace, new Set());
+    map.get(s.workspace)!.add("claude-code");
+  }
+  for (const s of codex) {
+    if (!s.workspace) continue;
+    if (!map.has(s.workspace)) map.set(s.workspace, new Set());
+    map.get(s.workspace)!.add("codex");
+  }
+
+  return [...map.entries()]
+    .map(([name, agentSet]) => ({ name, agents: agentSet.size }))
+    .sort((a, b) => b.agents - a.agents);
 }
 
 export function buildRecentSessions(): Session[] {
