@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Icon } from "@/components/icon";
 import { AGENT_ORDER, AGENTS } from "@/lib/config/agents";
 
+type AgentStatus = "online" | "offline" | "running" | "degraded";
 type Item = { href: string; label: string; icon: string; accent?: string; dot?: boolean };
 
 const MAIN: Item[] = [
@@ -34,7 +35,13 @@ const AGENT_ITEMS: Item[] = AGENT_ORDER.map((id) => ({
   dot: true,
 }));
 
-function NavLink({ item, collapsed, active }: { item: Item; collapsed: boolean; active: boolean }) {
+function dotColor(status: AgentStatus | undefined): string {
+  if (status === "running" || status === "online") return "bg-ok";
+  if (status === "degraded") return "bg-danger";
+  return "bg-faint";
+}
+
+function NavLink({ item, collapsed, active, agentStatus }: { item: Item; collapsed: boolean; active: boolean; agentStatus?: AgentStatus }) {
   return (
     <Link
       href={item.href}
@@ -58,7 +65,7 @@ function NavLink({ item, collapsed, active }: { item: Item; collapsed: boolean; 
           color={item.accent && active ? item.accent : undefined}
         />
         {item.dot && (
-          <span className="absolute -right-1 -top-0.5 size-1.5 rounded-full bg-ok ring-2 ring-surface" />
+          <span className={`absolute -right-1 -top-0.5 size-1.5 rounded-full ring-2 ring-surface ${dotColor(agentStatus)}`} />
         )}
       </span>
       {!collapsed && <span className="truncate">{item.label}</span>}
@@ -71,11 +78,13 @@ function Section({
   items,
   collapsed,
   isActive,
+  agentStatuses,
 }: {
   title?: string;
   items: Item[];
   collapsed: boolean;
   isActive: (href: string) => boolean;
+  agentStatuses?: Record<string, AgentStatus>;
 }) {
   return (
     <div className="space-y-0.5">
@@ -83,9 +92,18 @@ function Section({
         <p className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-faint">{title}</p>
       )}
       {title && collapsed && <div className="mt-3 mb-1 border-t border-line" />}
-      {items.map((it) => (
-        <NavLink key={it.href} item={it} collapsed={collapsed} active={isActive(it.href)} />
-      ))}
+      {items.map((it) => {
+        const agentId = it.href.startsWith("/agents/") ? it.href.replace("/agents/", "") : undefined;
+        return (
+          <NavLink
+            key={it.href}
+            item={it}
+            collapsed={collapsed}
+            active={isActive(it.href)}
+            agentStatus={agentId ? agentStatuses?.[agentId] : undefined}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -104,24 +122,34 @@ function fmt(n: number): string {
   return String(n);
 }
 
-export function Sidebar() {
+interface TokenBudgets { "claude-code": number; codex: number; }
+interface BudgetResponse { resolved: TokenBudgets; }
+
+export function Sidebar({ agentStatuses }: { agentStatuses?: Record<string, AgentStatus> }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [usage, setUsage] = useState<UsageData | null>(null);
+  const [budgets, setBudgets] = useState<TokenBudgets>({ "claude-code": 1_000_000, codex: 500_000 });
 
   useEffect(() => {
     fetch("/api/claude-code/usage")
       .then((r) => r.json())
       .then((d) => setUsage(d))
       .catch(() => {});
+    fetch("/api/config/token-budget")
+      .then((r) => r.json())
+      .then((d: BudgetResponse) => { if (d.resolved) setBudgets(d.resolved); })
+      .catch(() => {});
   }, []);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
-  const outputTokens = usage?.outputTokens ?? 0;
   const totalTokens = usage?.totalTokens ?? 0;
-  const pct = totalTokens > 0 ? Math.round((outputTokens / totalTokens) * 100) : 0;
+  const budget = budgets["claude-code"];
+  const usedPct = budget > 0 ? Math.min(100, Math.round((totalTokens / budget) * 100)) : 0;
+  const remainPct = 100 - usedPct;
+  const barColor = usedPct >= 95 ? "bg-danger" : usedPct >= 80 ? "bg-warn" : "bg-[var(--accent)]";
 
   return (
     <aside
@@ -148,7 +176,7 @@ export function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 pb-3">
         <Section items={MAIN} collapsed={collapsed} isActive={isActive} />
-        <Section title="AI Agents" items={AGENT_ITEMS} collapsed={collapsed} isActive={isActive} />
+        <Section title="AI Agents" items={AGENT_ITEMS} collapsed={collapsed} isActive={isActive} agentStatuses={agentStatuses} />
         <Section title="Workspace" items={WORKSPACE} collapsed={collapsed} isActive={isActive} />
         <Section title="Activity" items={ACTIVITY} collapsed={collapsed} isActive={isActive} />
         <Section title="System" items={SYSTEM} collapsed={collapsed} isActive={isActive} />
@@ -163,16 +191,20 @@ export function Sidebar() {
                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
                 Claude Code
               </span>
-              <span className="font-mono text-[11px] text-faint">{usage?.available ? `${usage.sessions} sessions` : "—"}</span>
+              <span className="font-mono text-[11px] text-faint">
+                {usage?.available ? `${remainPct}% left` : "—"}
+              </span>
             </div>
             <div className="mt-2 h-[5px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
               <div
-                className="h-full rounded-full bg-[var(--accent)] transition-all duration-1000"
-                style={{ width: `${usage?.available ? pct : 0}%`, boxShadow: "0 0 8px color-mix(in srgb, var(--accent) 55%, transparent)" }}
+                className={`h-full rounded-full transition-all duration-1000 ${barColor}`}
+                style={{ width: `${usage?.available ? usedPct : 0}%` }}
               />
             </div>
             {usage?.available ? (
-              <p className="mt-2 text-[11px] text-faint">{fmt(totalTokens)} tokens · {pct}% output</p>
+              <p className="mt-2 text-[11px] text-faint">
+                {fmt(totalTokens)} / {fmt(budget)} tokens this month
+              </p>
             ) : (
               <p className="mt-2 text-[11px] text-faint">Loading usage…</p>
             )}

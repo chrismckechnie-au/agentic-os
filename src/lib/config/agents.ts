@@ -17,6 +17,13 @@ export interface AgentConfig {
   /** Lucide icon key (see components/icon.tsx). */
   icon: string;
   tabs: AgentTab[];
+  /**
+   * If set, this agent has a real local CLI that can run live in a PTY terminal
+   * (see /api/pty in server.mjs). Presence gates the UI's "Start live session"
+   * control. The server keeps its own authoritative allowlist — this is UI hint
+   * only. The binary name is shown to the user; it only runs where it's installed.
+   */
+  liveCli?: { bin: string };
 }
 
 export const AGENTS: Record<AgentId, AgentConfig> = {
@@ -26,6 +33,7 @@ export const AGENTS: Record<AgentId, AgentConfig> = {
     tagline: "AI assistant for coding, debugging and refactoring.",
     accent: "#e8682c",
     icon: "Sparkles",
+    liveCli: { bin: "claude" },
     tabs: [
       { id: "terminal", label: "Terminal" },
       { id: "files", label: "Files" },
@@ -39,6 +47,7 @@ export const AGENTS: Record<AgentId, AgentConfig> = {
     tagline: "OpenAI coding agent for autonomous development.",
     accent: "#10b981",
     icon: "CodeXml",
+    liveCli: { bin: "codex" },
     tabs: [
       { id: "terminal", label: "Terminal" },
       { id: "plan", label: "Plan" },
@@ -53,6 +62,7 @@ export const AGENTS: Record<AgentId, AgentConfig> = {
     tagline: "Autonomous AI agent for research and automation.",
     accent: "#a855f7",
     icon: "Send",
+    liveCli: { bin: "hermes" },
     tabs: [
       { id: "terminal", label: "Terminal" },
       { id: "memory", label: "Memory" },

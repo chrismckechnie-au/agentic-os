@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, type TabDef } from "@/components/ui/tabs";
 import { Icon } from "@/components/icon";
 import { SessionList } from "@/components/agent/session-list";
-import { ChatInput, type ChatInputHandle } from "@/components/agent/chat-input";
+import { ChatInput } from "@/components/agent/chat-input";
 import { Terminal } from "@/components/agent/terminal";
+import { PtyTerminal } from "@/components/agent/pty-terminal";
 import {
   ChangedFiles,
   ClaudeAside,
@@ -24,7 +25,6 @@ import type {
   Note,
   Session,
   SessionDetail,
-  SessionMessage,
   Skill,
 } from "@/lib/types";
 import type { AgentConfig } from "@/lib/config/agents";
@@ -42,12 +42,10 @@ function buildPanels(
   agentId: AgentId,
   cfg: AgentConfig,
   detail: SessionDetail,
-  transcript: SessionMessage[],
+  terminalNode: React.ReactNode,
   extras: { memory?: MemoryStore[]; skills?: Skill[]; jobs?: Job[]; notes?: Note[] },
 ): { tabs: TabDef[]; panels: Record<string, React.ReactNode>; defaultId: string } {
-  const prompt = `${agentId}@${detail.workspace ?? "agentic-os"}:~$`;
-  const term = <Terminal transcript={transcript} prompt={prompt} />;
-  const panels: Record<string, React.ReactNode> = { terminal: term };
+  const panels: Record<string, React.ReactNode> = { terminal: terminalNode };
   let defaultId = "terminal";
 
   if (agentId === "claude-code") {
@@ -108,7 +106,7 @@ function buildPanels(
         <div className="text-ok">Tests: 42 passed, 42 total (100%)</div>
       </div>
     );
-    panels.logs = term;
+    panels.logs = terminalNode;
   }
 
   if (agentId === "hermes") {
@@ -187,6 +185,8 @@ export function SessionWorkspace({
   initialSessions,
   initialDetail,
   realData,
+  liveAgent,
+  autoStartLive,
   memory,
   skills,
   jobs,
@@ -196,7 +196,12 @@ export function SessionWorkspace({
   cfg: AgentConfig;
   initialSessions: Session[];
   initialDetail: SessionDetail;
+  /** Agent has a real session-history reader (claude-code, codex). */
   realData: boolean;
+  /** Agent has a local CLI that can run live in a PTY (see cfg.liveCli / server.mjs). */
+  liveAgent: boolean;
+  /** Open a live PTY session automatically on mount (e.g. ?new=1 from Overview). */
+  autoStartLive?: boolean;
   memory?: MemoryStore[];
   skills?: Skill[];
   jobs?: Job[];
@@ -204,20 +209,34 @@ export function SessionWorkspace({
 }) {
   const [selectedId, setSelectedId] = useState(initialDetail.id);
   const [detail, setDetail] = useState<SessionDetail>(initialDetail);
-  const [liveTranscript, setLiveTranscript] = useState<SessionMessage[]>([]);
-  const [running, setRunning] = useState(false);
+  const [live, setLive] = useState(false);
+  const [liveKey, setLiveKey] = useState(0); // bump to start a fresh PTY session
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [newSession, setNewSession] = useState(false);
-  const inputHandleRef = useRef<ChatInputHandle>(null);
+
+  const startLive = useCallback(() => {
+    if (!liveAgent) return;
+    setLiveKey((k) => k + 1);
+    setLive(true);
+  }, [liveAgent]);
+
+  const stopLive = useCallback(() => setLive(false), []);
+
+  // Auto-open a live session once when arriving via ?new=1.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStartLive && liveAgent && !autoStarted.current) {
+      autoStarted.current = true;
+      startLive();
+    }
+  }, [autoStartLive, liveAgent, startLive]);
 
   const handleSelectSession = useCallback(
     async (id: string) => {
       if (id === selectedId) return;
       setSelectedId(id);
-      setLiveTranscript([]);
-      setNewSession(false);
+      setLive(false); // browsing history exits the live session
       setMenuOpen(false);
       if (!realData) return;
       setLoading(true);
@@ -238,132 +257,39 @@ export function SessionWorkspace({
     [selectedId, agentId, realData],
   );
 
-  const handleSend = useCallback(
-    async (prompt: string) => {
-      setNewSession(false);
-      setLiveTranscript((prev) => [
-        ...prev,
-        { role: "user" as const, kind: "prompt" as const, text: prompt },
-      ]);
-      setRunning(true);
+  const prompt = `${agentId}@${detail.workspace ?? "agentic-os"}:~$`;
+  const termHeight = expanded ? "h-[640px]" : "h-[460px]";
 
-      let res: Response;
-      try {
-        res = await fetch(`/api/agents/${agentId}/run`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ prompt, cwd: detail.sandbox }),
-        });
-      } catch {
-        setLiveTranscript((prev) => [
-          ...prev,
-          { role: "system" as const, kind: "error" as const, text: "Network error" },
-        ]);
-        setRunning(false);
-        return;
-      }
-
-      if (!res.ok || !res.body) {
-        const errText = await res.text().catch(() => "");
-        setLiveTranscript((prev) => [
-          ...prev,
-          { role: "system" as const, kind: "error" as const, text: errText || `HTTP ${res.status}` },
-        ]);
-        setRunning(false);
-        return;
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-
-      const flush = (part: string) => {
-        const lines = part.split("\n");
-        let event = "message";
-        let data = "";
-        for (const line of lines) {
-          if (line.startsWith("event: ")) event = line.slice(7).trim();
-          if (line.startsWith("data: ")) data = line.slice(6).trim();
-        }
-        if (!data) return;
-        let payload: Record<string, unknown>;
-        try {
-          payload = JSON.parse(data) as Record<string, unknown>;
-        } catch {
-          return;
-        }
-        if (event === "delta" && typeof payload.text === "string") {
-          setLiveTranscript((prev) => {
-            const last = prev[prev.length - 1];
-            if (last?.kind === "output" && last.role === "agent") {
-              return [...prev.slice(0, -1), { ...last, text: last.text + (payload.text as string) }];
-            }
-            return [...prev, { role: "agent" as const, kind: "output" as const, text: payload.text as string }];
-          });
-        } else if (event === "step" && typeof payload.text === "string") {
-          setLiveTranscript((prev) => [
-            ...prev,
-            { role: "agent" as const, kind: "step" as const, text: payload.text as string },
-          ]);
-        } else if (event === "done") {
-          setRunning(false);
-        } else if (event === "error") {
-          setLiveTranscript((prev) => [
-            ...prev,
-            {
-              role: "system" as const,
-              kind: "error" as const,
-              text: typeof payload.message === "string" ? payload.message : "Error from agent",
-            },
-          ]);
-          setRunning(false);
-        }
-      };
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const parts = buf.split("\n\n");
-          buf = parts.pop() ?? "";
-          for (const part of parts) {
-            if (part.trim()) flush(part);
-          }
-        }
-      } finally {
-        setRunning(false);
-      }
-    },
-    [agentId, detail.sandbox],
+  const terminalNode = live ? (
+    <PtyTerminal
+      key={liveKey}
+      agentId={agentId}
+      cwd={detail.sandbox}
+      accent={cfg.accent}
+      heightClass={termHeight}
+      onClose={stopLive}
+    />
+  ) : (
+    <Terminal transcript={detail.transcript} prompt={prompt} heightClass={termHeight} />
   );
 
-  const handleNewSession = useCallback(() => {
-    setSelectedId("");
-    setLiveTranscript([]);
-    setNewSession(true);
-    setTimeout(() => inputHandleRef.current?.focus(), 50);
-  }, []);
-
-  const transcript = newSession ? [] : liveTranscript.length > 0 ? liveTranscript : detail.transcript;
-  const { tabs, panels, defaultId } = buildPanels(agentId, cfg, detail, transcript, {
+  const { tabs, panels, defaultId } = buildPanels(agentId, cfg, detail, terminalNode, {
     memory,
     skills,
     jobs,
     notes,
   });
 
-  const isMock = !realData;
-  const cardTitle = loading ? "Loading…" : newSession ? "New session" : detail.title;
+  const cardTitle = loading ? "Loading…" : live ? `Live · ${cfg.name}` : detail.title;
 
   return (
     <>
-      <div className="xl:col-span-3">
+      <div className="xl:col-span-3 max-h-[740px]">
         <SessionList
           sessions={initialSessions}
           activeId={selectedId}
           onSelect={handleSelectSession}
-          onNew={handleNewSession}
+          onNew={liveAgent ? startLive : undefined}
         />
       </div>
 
@@ -380,7 +306,7 @@ export function SessionWorkspace({
                 ) : (
                   <>
                     <span className="truncate">{cardTitle}</span>
-                    {running && (
+                    {live && (
                       <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-ok">
                         <span className="size-1.5 animate-pulse rounded-full bg-ok" /> Live
                       </span>
@@ -390,6 +316,22 @@ export function SessionWorkspace({
               </span>
             </CardTitle>
             <div className="relative flex shrink-0 items-center gap-1 text-faint">
+              {liveAgent && !live && (
+                <button
+                  onClick={startLive}
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--accent-line)] bg-[var(--accent-soft)] px-2.5 py-1 text-xs font-medium text-[var(--accent)] transition-opacity hover:opacity-90"
+                >
+                  <Icon name="Play" size={12} /> Start live session
+                </button>
+              )}
+              {live && (
+                <button
+                  onClick={stopLive}
+                  className="flex items-center gap-1.5 rounded-md border border-line bg-surface-2 px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:text-ink"
+                >
+                  <Icon name="Square" size={12} /> Stop
+                </button>
+              )}
               <button
                 onClick={() => setExpanded((v) => !v)}
                 className="grid size-7 place-items-center rounded-md hover:bg-surface-2 hover:text-muted"
@@ -433,21 +375,20 @@ export function SessionWorkspace({
           </CardHeader>
           <CardBody className="pt-0">
             <Tabs tabs={tabs} panels={panels} defaultId={defaultId} />
-            <div className="mt-4">
-              <ChatInput
-                agentId={agentId}
-                placeholder={`Message ${cfg.name}…`}
-                model={detail.model}
-                onSend={isMock ? undefined : handleSend}
-                running={running}
-                disabled={isMock}
-                disabledHint={`${cfg.name} is a mock agent — no live CLI`}
-                handleRef={inputHandleRef}
-              />
-              <p className="mt-1.5 text-center text-[11px] text-faint">
-                Shift + Enter for new line, Enter to send
-              </p>
-            </div>
+            {!liveAgent && (
+              <div className="mt-4">
+                <ChatInput
+                  agentId={agentId}
+                  placeholder={`Message ${cfg.name}…`}
+                  model={detail.model}
+                  disabled
+                  disabledHint={`${cfg.name} has no live CLI on this host`}
+                />
+                <p className="mt-1.5 text-center text-[11px] text-faint">
+                  Shift + Enter for new line, Enter to send
+                </p>
+              </div>
+            )}
           </CardBody>
         </Card>
       </div>

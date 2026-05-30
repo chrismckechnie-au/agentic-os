@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import { Icon } from "@/components/icon";
 import { cn } from "@/lib/utils";
 import type { SessionMessage } from "@/lib/types";
@@ -51,16 +54,29 @@ function Line({ msg }: { msg: SessionMessage }) {
 export function Terminal({
   transcript,
   prompt = "agent@agentic-os:~$",
+  heightClass = "h-[460px]",
   className,
 }: {
   transcript: SessionMessage[];
   prompt?: string;
+  /** Fixed height so the terminal scrolls internally instead of growing the page. */
+  heightClass?: string;
   className?: string;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Pin to the bottom as new lines arrive, mirroring a real terminal.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [transcript]);
+
   return (
     <div
+      ref={scrollRef}
       className={cn(
-        "overflow-auto rounded-xl border border-line bg-[#080a0d] p-4 font-mono text-[12.5px] leading-6",
+        "overflow-y-auto rounded-xl border border-line bg-[#080a0d] p-4 font-mono text-[12.5px] leading-6",
+        heightClass,
         className,
       )}
     >

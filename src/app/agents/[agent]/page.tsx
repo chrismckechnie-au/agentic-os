@@ -14,7 +14,9 @@ import {
   readSessions as readCodexSessions,
   readSessionDetail as readCodexDetail,
 } from "@/lib/codex/reader";
+import { readNotes, readVaultStats } from "@/lib/obsidian/reader";
 import type { Session, SessionDetail } from "@/lib/types";
+import { buildClaudeStats, buildCodexStats } from "@/lib/agents/stats";
 
 export function generateStaticParams() {
   return AGENT_ORDER.map((agent) => ({ agent }));
@@ -28,10 +30,17 @@ function accentStyle(hex: string): CSSProperties {
   };
 }
 
-export default async function AgentPage({ params }: { params: Promise<{ agent: string }> }) {
+export default async function AgentPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ agent: string }>;
+  searchParams: Promise<{ session?: string; new?: string }>;
+}) {
   const { agent } = await params;
   if (!isAgentId(agent)) notFound();
 
+  const { session: reqSession, new: isNew } = await searchParams;
   const data = await getProvider().getAgentPage(agent);
   const cfg = AGENTS[agent];
   let initialDetail: SessionDetail = data.activeSession;
@@ -48,7 +57,8 @@ export default async function AgentPage({ params }: { params: Promise<{ agent: s
         updatedAt: s.updatedAt,
         group: s.group,
       }));
-      const d = readClaudeDetail(real[0].id);
+      const detailId = reqSession && real.some((r) => r.id === reqSession) ? reqSession : real[0].id;
+      const d = readClaudeDetail(detailId);
       if (d) initialDetail = d;
     }
   }
@@ -65,19 +75,35 @@ export default async function AgentPage({ params }: { params: Promise<{ agent: s
         updatedAt: s.updatedAt,
         group: s.group,
       }));
-      const d = readCodexDetail(real[0].id);
+      const detailId = reqSession && real.some((r) => r.id === reqSession) ? reqSession : real[0].id;
+      const d = readCodexDetail(detailId);
       if (d) initialDetail = d;
     }
   }
 
+  if (agent === "obsidian") {
+    const notes = readNotes(200);
+    if (notes.length > 0) {
+      data.notes = notes;
+    }
+    // vault stats available for future Graph tab header use
+    // const vaultStats = readVaultStats();
+  }
+
   const realData = agent === "claude-code" || agent === "codex";
+  const liveAgent = Boolean(cfg.liveCli);
+  const autoStartLive = isNew === "1" && liveAgent;
+  const stats =
+    agent === "claude-code" ? buildClaudeStats() :
+    agent === "codex"       ? buildCodexStats() :
+    data.stats;
 
   return (
     <div style={accentStyle(cfg.accent)}>
       <PageHeader title={cfg.name} subtitle={cfg.tagline} icon={cfg.icon} accent={cfg.accent} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {data.stats.map((stat) => (
+        {stats.map((stat) => (
           <StatCard key={stat.id} stat={stat} />
         ))}
       </div>
@@ -89,6 +115,8 @@ export default async function AgentPage({ params }: { params: Promise<{ agent: s
           initialSessions={data.sessions}
           initialDetail={initialDetail}
           realData={realData}
+          liveAgent={liveAgent}
+          autoStartLive={autoStartLive}
           memory={data.memory}
           skills={data.skills}
           jobs={data.jobs}

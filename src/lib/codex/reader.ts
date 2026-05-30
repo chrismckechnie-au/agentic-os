@@ -40,6 +40,7 @@ export interface CodexSession {
   model: string | null;
   totalTokens: number;
   lastTimestamp: string;
+  hitLimit: boolean;
 }
 
 export interface CodexUsage {
@@ -63,6 +64,16 @@ function findSessionFile(id: string, dateStr: string): string | null {
   return files.length > 0 ? path.join(dir, files[0]) : null;
 }
 
+const RATE_LIMIT_PATTERNS = [
+  /rate.?limit/i,
+  /usage.?limit/i,
+  /too.?many.?requests/i,
+  /overloaded_error/i,
+  /\b529\b/,
+  /usage.*policy/i,
+  /quota.*exceeded/i,
+];
+
 function parseSessionFile(filePath: string): {
   cwd: string | null;
   model: string | null;
@@ -70,9 +81,11 @@ function parseSessionFile(filePath: string): {
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
+  hitLimit: boolean;
 } {
-  const result = { cwd: null as string | null, model: null as string | null, totalTokens: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0 };
+  const result = { cwd: null as string | null, model: null as string | null, totalTokens: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, hitLimit: false };
   const lines = fs.readFileSync(filePath, { encoding: "utf-8", flag: "r" }).split("\n").filter((l) => l.trim());
+  result.hitLimit = lines.slice(-20).some((l) => RATE_LIMIT_PATTERNS.some((re) => re.test(l)));
 
   for (const line of lines) {
     try {
@@ -125,12 +138,14 @@ export function readSessions(limit = 50): CodexSession[] {
     // Try to read cwd from session file (best-effort, skip if slow)
     let workspace: string | null = null;
     let model: string | null = null;
+    let hitLimit = false;
     try {
       const filePath = findSessionFile(e.id, e.updated_at);
       if (filePath) {
         const parsed = parseSessionFile(filePath);
         workspace = parsed.cwd ? path.basename(parsed.cwd) : null;
         model = parsed.model;
+        hitLimit = parsed.hitLimit;
       }
     } catch {
       // best-effort
@@ -147,6 +162,7 @@ export function readSessions(limit = 50): CodexSession[] {
       model,
       totalTokens: 0,
       lastTimestamp: e.updated_at,
+      hitLimit,
     };
   });
 }

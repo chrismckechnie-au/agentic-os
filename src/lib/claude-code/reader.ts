@@ -42,6 +42,7 @@ export interface ClaudeSession {
   outputTokens: number;
   cacheTokens: number;
   lastTimestamp: string;
+  hitLimit: boolean;
 }
 
 export interface ClaudeUsage {
@@ -51,6 +52,25 @@ export interface ClaudeUsage {
   outputTokens: number;
   cacheTokens: number;
   sessions: number;
+}
+
+const RATE_LIMIT_PATTERNS = [
+  /rate.?limit/i,
+  /usage.?limit/i,
+  /too.?many.?requests/i,
+  /overloaded_error/i,
+  /\b529\b/,
+  /usage.*policy/i,
+  /quota.*exceeded/i,
+];
+
+function hasRateLimitSignal(lines: string[]): boolean {
+  // Check last 20 lines for error/system messages containing limit signals
+  const tail = lines.slice(-20);
+  for (const line of tail) {
+    if (RATE_LIMIT_PATTERNS.some((re) => re.test(line))) return true;
+  }
+  return false;
 }
 
 function parseJsonlFile(filePath: string): {
@@ -64,6 +84,7 @@ function parseJsonlFile(filePath: string): {
   inputTokens: number;
   outputTokens: number;
   cacheTokens: number;
+  hitLimit: boolean;
 } {
   const result = {
     firstUserMsg: null as string | null,
@@ -76,10 +97,12 @@ function parseJsonlFile(filePath: string): {
     inputTokens: 0,
     outputTokens: 0,
     cacheTokens: 0,
+    hitLimit: false,
   };
 
   const content = fs.readFileSync(filePath, "utf-8");
   const lines = content.split("\n").filter((l) => l.trim());
+  result.hitLimit = hasRateLimitSignal(lines);
 
   for (const line of lines) {
     try {
@@ -159,6 +182,7 @@ export function readSessions(limit = 50): ClaudeSession[] {
           outputTokens: parsed.outputTokens,
           cacheTokens: parsed.cacheTokens,
           lastTimestamp: parsed.lastTimestamp,
+          hitLimit: parsed.hitLimit,
         });
       } catch {
         // skip unreadable files

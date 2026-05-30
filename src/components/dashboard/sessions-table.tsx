@@ -24,7 +24,7 @@ export function SessionsTable({ sessions }: { sessions: Session[] }) {
               className="group border-b border-line/60 last:border-0 transition-colors hover:bg-surface-2/50"
             >
               <td className="px-4 py-3">
-                <Link href={`/agents/${s.agentId}`} className="flex items-center gap-2 font-medium text-ink">
+                <Link href={`/agents/${s.agentId}?session=${s.id}`} className="flex items-center gap-2 font-medium text-ink">
                   <Icon name="MessageSquare" size={14} className="text-faint" />
                   <span className="truncate">{s.title}</span>
                 </Link>

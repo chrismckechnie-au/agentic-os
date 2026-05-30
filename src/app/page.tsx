@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { getProvider } from "@/lib/providers";
+import { buildAgentSummaries } from "@/lib/agents/detect";
+import { buildOverviewStats, buildRecentSessions } from "@/lib/overview/real";
+import { buildActivity } from "@/lib/activity/real";
+import { OverviewActions } from "@/components/dashboard/overview-actions";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { OrchestrationPanel } from "@/components/dashboard/orchestration-panel";
@@ -11,6 +15,10 @@ import { Icon } from "@/components/icon";
 
 export default async function OverviewPage() {
   const data = await getProvider().getOverview();
+  const agents = buildAgentSummaries();
+  const stats = buildOverviewStats(agents);
+  const recentSessions = buildRecentSessions();
+  const activity = buildActivity(6);
 
   return (
     <>
@@ -18,34 +26,19 @@ export default async function OverviewPage() {
         title="Overview"
         subtitle="Monitor agents, sessions, and system health at a glance."
         icon="LayoutGrid"
-        right={
-          <div className="flex gap-2">
-            <button
-              className="flex h-[34px] items-center gap-2 rounded-[10px] border px-3 text-sm font-medium transition-colors"
-              style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "var(--color-ink)" }}
-            >
-              <Icon name="RefreshCw" size={14} /> Refresh
-            </button>
-            <button
-              className="flex h-[34px] items-center gap-2 rounded-[10px] px-3 text-sm font-medium text-white transition-colors"
-              style={{ background: "var(--accent)", boxShadow: "0 6px 20px -8px color-mix(in srgb, var(--accent) 70%, transparent)" }}
-            >
-              <Icon name="Plus" size={14} /> New Session
-            </button>
-          </div>
-        }
+        right={<OverviewActions />}
       />
 
       {/* 5-col stat grid */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-5">
-        {data.stats.map((s) => (
+        {stats.map((s) => (
           <StatCard key={s.id} stat={s} />
         ))}
       </div>
 
       {/* Orchestration + Activity */}
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
-        <OrchestrationPanel agents={data.agents} />
+        <OrchestrationPanel agents={agents} />
 
         <div className="panel">
           <div className="flex items-center justify-between gap-3 px-5 py-4">
@@ -58,7 +51,7 @@ export default async function OverviewPage() {
             </Link>
           </div>
           <div className="px-5 pb-5 pt-0">
-            <ActivityFeed items={data.activity} />
+            <ActivityFeed items={activity} />
           </div>
         </div>
       </div>
@@ -75,7 +68,7 @@ export default async function OverviewPage() {
               All sessions <Icon name="ArrowRight" size={12} />
             </Link>
           </div>
-          <SessionsTable sessions={data.recentSessions} />
+          <SessionsTable sessions={recentSessions} />
         </div>
 
         <div className="flex flex-col gap-4">

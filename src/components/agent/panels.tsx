@@ -1,6 +1,7 @@
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/icon";
+import { CopyButton } from "@/components/ui/copy-button";
 import { compact, cn } from "@/lib/utils";
 import type {
   Commit,
@@ -108,9 +109,7 @@ export function ClaudeAside({ s }: { s: SessionDetail }) {
       <Card>
         <CardHeader>
           <CardTitle>Session Details</CardTitle>
-          <button className="flex items-center gap-1 text-xs text-faint hover:text-muted">
-            <Icon name="Copy" size={12} /> Copy ID
-          </button>
+          <CopyButton value={s.id} label="Copy ID" />
         </CardHeader>
         <CardBody className="pt-0">
           <div className="divide-y divide-line">

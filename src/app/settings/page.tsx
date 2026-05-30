@@ -3,6 +3,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/icon";
 import { cn } from "@/lib/utils";
+import { TokenBudgetSettings } from "@/components/settings/token-budget-settings";
 
 export default function SettingsPage() {
   const source = process.env.DATA_SOURCE ?? "mock";
@@ -48,6 +49,18 @@ export default function SettingsPage() {
                 );
               })}
             </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Token Budgets</CardTitle>
+          </CardHeader>
+          <CardBody className="pt-0">
+            <p className="mb-3 text-sm text-muted">
+              Set your monthly token budget per agent. Used to calculate % remaining in the sidebar and on agent pages.
+            </p>
+            <TokenBudgetSettings />
           </CardBody>
         </Card>
 

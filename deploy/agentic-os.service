@@ -1,0 +1,22 @@
+# Agentic OS — systemd user service
+# Install: cp deploy/agentic-os.service ~/.config/systemd/user/
+# Enable:  systemctl --user daemon-reload
+#          systemctl --user enable --now agentic-os
+# Persist: loginctl enable-linger <username>
+# Logs:    journalctl --user -u agentic-os -f
+# Tunnel:  ssh -L 3017:localhost:3017 user@box  →  http://localhost:3017
+
+[Unit]
+Description=Agentic OS Dashboard
+After=network.target
+
+[Service]
+WorkingDirectory=%h/agentic-os
+Environment=NODE_ENV=production
+EnvironmentFile=-%h/.agentic-os.env
+ExecStart=/usr/bin/node server.mjs
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
