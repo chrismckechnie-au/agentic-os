@@ -14,9 +14,17 @@ import {
   readSessions as readCodexSessions,
   readSessionDetail as readCodexDetail,
 } from "@/lib/codex/reader";
-import { readNotes, readVaultStats } from "@/lib/obsidian/reader";
+import { readNotes } from "@/lib/obsidian/reader";
+import {
+  hermesAvailable,
+  readJobs as readHermesJobs,
+  readSkills as readHermesSkills,
+  readMemory as readHermesMemory,
+  readSessions as readHermesSessions,
+  readSessionDetail as readHermesDetail,
+} from "@/lib/hermes/reader";
 import type { Session, SessionDetail } from "@/lib/types";
-import { buildClaudeStats, buildCodexStats } from "@/lib/agents/stats";
+import { buildClaudeStats, buildCodexStats, buildHermesStats } from "@/lib/agents/stats";
 
 export function generateStaticParams() {
   return AGENT_ORDER.map((agent) => ({ agent }));
@@ -90,12 +98,31 @@ export default async function AgentPage({
     // const vaultStats = readVaultStats();
   }
 
+  if (agent === "hermes" && hermesAvailable()) {
+    const jobs = readHermesJobs();
+    const skills = readHermesSkills();
+    const memory = readHermesMemory();
+    if (jobs.length > 0) data.jobs = jobs;
+    if (skills.length > 0) data.skills = skills;
+    if (memory.length > 0) data.memory = memory;
+
+    const real = readHermesSessions(100);
+    if (real.length > 0) {
+      data.sessions = real;
+      const detailId = reqSession && real.some((r) => r.id === reqSession) ? reqSession : real[0].id;
+      const d = readHermesDetail(detailId);
+      if (d) initialDetail = d;
+    }
+  }
+
   const realData = agent === "claude-code" || agent === "codex";
   const liveAgent = Boolean(cfg.liveCli);
   const autoStartLive = isNew === "1" && liveAgent;
+  const hermesStats = agent === "hermes" ? buildHermesStats() : [];
   const stats =
     agent === "claude-code" ? buildClaudeStats() :
     agent === "codex"       ? buildCodexStats() :
+    agent === "hermes" && hermesStats.length > 0 ? hermesStats :
     data.stats;
 
   return (

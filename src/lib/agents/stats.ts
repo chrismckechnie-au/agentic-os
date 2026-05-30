@@ -1,8 +1,9 @@
-// Server-only. Derives real StatMetric[] for claude-code and codex from local readers.
+// Server-only. Derives real StatMetric[] for claude-code, codex and hermes from local readers.
 import type { StatMetric } from "@/lib/types";
 import { readSessions as readClaudeSessions } from "@/lib/claude-code/reader";
 import { readSessions as readCodexSessions } from "@/lib/codex/reader";
 import { readUserConfig, resolvedBudgets } from "@/lib/config/user-config";
+import { hermesAvailable, readJobs, readSkills, readMemory } from "@/lib/hermes/reader";
 
 function fmtTok(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -103,6 +104,61 @@ export function buildCodexStats(): StatMetric[] {
       hint: "Not available locally",
       icon: "CircleCheck",
       spark: [0, 0, 0, 0, 0, 0, 0],
+    },
+  ];
+}
+
+/**
+ * Real Hermes stats from ~/.hermes (jobs.json, profile/skills, on-disk sizes).
+ * Returns [] when Hermes isn't present so the page keeps its mock stats.
+ */
+export function buildHermesStats(): StatMetric[] {
+  if (!(() => { try { return hermesAvailable(); } catch { return false; } })()) return [];
+
+  const jobs = (() => { try { return readJobs(); } catch { return []; } })();
+  const skills = (() => { try { return readSkills(); } catch { return []; } })();
+  const memory = (() => { try { return readMemory(); } catch { return []; } })();
+
+  const activeJobs = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
+  const finished = jobs.filter((j) => j.status === "completed" || j.status === "failed");
+  const succeeded = jobs.filter((j) => j.status === "completed").length;
+  const successRate = finished.length > 0 ? Math.round((succeeded / finished.length) * 100) : null;
+  const memSize = memory.length > 0 ? memory[0] : null;
+  // Total label = sum is already split per-store; show the largest store's size as headline.
+  const totalLabel = memory.length > 0 ? memSize!.size : "—";
+
+  return [
+    {
+      id: "hm-jobs",
+      label: "Active Jobs",
+      value: String(activeJobs),
+      hint: `${jobs.length} total cron jobs`,
+      icon: "Activity",
+      spark: [0, 1, 1, activeJobs, activeJobs, activeJobs, activeJobs],
+    },
+    {
+      id: "hm-memory",
+      label: "Largest Store",
+      value: totalLabel,
+      hint: memSize ? `${memSize.label} · ${memory.length} stores tracked` : "No data on disk",
+      icon: "Database",
+      spark: [0, 0, 0, 0, 0, 0, memory.length],
+    },
+    {
+      id: "hm-skills",
+      label: "Skills",
+      value: String(skills.length),
+      hint: `${skills.filter((s) => s.status === "active").length} active`,
+      icon: "Sparkles",
+      spark: [0, 0, skills.length, skills.length, skills.length, skills.length, skills.length],
+    },
+    {
+      id: "hm-success",
+      label: "Job Success Rate",
+      value: successRate != null ? `${successRate}%` : "—",
+      hint: finished.length > 0 ? `${succeeded}/${finished.length} runs` : "No completed runs",
+      icon: "Target",
+      spark: [0, 0, 0, 0, 0, 0, successRate ?? 0],
     },
   ];
 }
