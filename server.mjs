@@ -7,7 +7,7 @@
 // here (server-only) so they never enter the client bundle.
 
 import { createServer } from "node:http";
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { isIP } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -18,9 +18,9 @@ import pty from "node-pty";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3017", 10);
+const isWin = process.platform === "win32";
 const bind = resolveBindHost(process.env.AGENTIC_HOST);
 const hostname = bind.hostname;
-const isWin = process.platform === "win32";
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -28,6 +28,22 @@ const packageJson = JSON.parse(fs.readFileSync(new URL("./package.json", import.
 const runRouteEnabled = /^(1|true)$/i.test(process.env.AGENTIC_ENABLE_RUN_ROUTE ?? "");
 
 function resolveTailscaleIp() {
+  const candidates = isWin
+    ? ["tailscale"]
+    : ["tailscale", "/usr/bin/tailscale", "/usr/sbin/tailscale", "/bin/tailscale", "/sbin/tailscale"];
+
+  for (const candidate of candidates) {
+    try {
+      const out = execFileSync(candidate, ["ip", "-4"], { stdio: ["ignore", "pipe", "ignore"], timeout: 2000 })
+        .toString()
+        .trim();
+      const tailscaleIp = out.split(/\r?\n/).find((line) => isIP(line.trim()) === 4)?.trim() ?? null;
+      if (tailscaleIp) return tailscaleIp;
+    } catch {
+      /* try the next common install location */
+    }
+  }
+
   try {
     const out = execSync("tailscale ip -4", { stdio: ["ignore", "pipe", "ignore"], timeout: 2000 })
       .toString()

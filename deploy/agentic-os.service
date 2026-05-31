@@ -13,11 +13,11 @@ After=network.target
 [Service]
 WorkingDirectory=%h/agentic-os
 Environment=NODE_ENV=production
-Environment=PATH=%h/.hermes/node/bin:%h/.hermes/hermes-agent/venv/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=%h/.hermes/node/bin:%h/.hermes/hermes-agent/venv/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin
 EnvironmentFile=-%h/.agentic-os.env
 # Keep the dashboard reachable over Tailscale without binding every interface.
 Environment=AGENTIC_HOST=tailscale
-ExecStart=%h/.hermes/node/bin/node server.mjs
+ExecStart=/usr/bin/env AGENTIC_HOST=tailscale %h/.hermes/node/bin/node server.mjs
 Restart=on-failure
 RestartSec=5
 UMask=0077

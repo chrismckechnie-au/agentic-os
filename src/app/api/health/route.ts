@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { execSync } from "node:child_process";
 import fs from "node:fs";
-import { isIP } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import pkg from "../../../../package.json";
@@ -25,17 +23,6 @@ function dirExists(target: string): boolean {
   }
 }
 
-function resolveTailscaleIp(): string | null {
-  try {
-    const out = execSync("tailscale ip -4", { stdio: ["ignore", "pipe", "ignore"], timeout: 2000 })
-      .toString()
-      .trim();
-    return out.split(/\r?\n/).find((line) => isIP(line.trim()) === 4)?.trim() ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function resolveBindHost(value: string | undefined): {
   hostname: string;
   configured: string | null;
@@ -49,17 +36,11 @@ function resolveBindHost(value: string | undefined): {
   }
 
   if (/^(tailscale|tailscale-ip|tailnet)$/i.test(configured)) {
-    const tailscaleIp = resolveTailscaleIp();
-    return tailscaleIp
-      ? { hostname: tailscaleIp, configured, source: "tailscale", ok: true }
-      : { hostname: "127.0.0.1", configured, source: "tailscale-unavailable", ok: false };
+    return { hostname: "tailscale", configured, source: "tailscale", ok: true };
   }
 
   if (/^auto$/i.test(configured)) {
-    const tailscaleIp = resolveTailscaleIp();
-    return tailscaleIp
-      ? { hostname: tailscaleIp, configured, source: "tailscale-auto", ok: true }
-      : { hostname: "127.0.0.1", configured, source: "auto-loopback", ok: true };
+    return { hostname: "auto", configured, source: "auto", ok: true };
   }
 
   return { hostname: configured, configured, source: "configured", ok: true };
