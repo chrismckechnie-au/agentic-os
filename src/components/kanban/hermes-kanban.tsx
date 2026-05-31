@@ -6,7 +6,7 @@ import { TaskCard } from "@/components/kanban/task-card";
 import { MarkdownLite } from "@/components/agent/panels";
 import { Icon } from "@/components/icon";
 import { cn } from "@/lib/utils";
-import type { KanbanBoard, KanbanTaskDetail, TaskStatus } from "@/lib/types";
+import type { KanbanBoard, KanbanTask, KanbanTaskDetail, TaskStatus } from "@/lib/types";
 
 const STATUS_COLOR: Record<string, string> = {
   ...Object.fromEntries(KANBAN_COLUMNS.map((c) => [c.status, c.color])),
@@ -42,6 +42,9 @@ export function HermesKanban({
   const [detailLoading, setDetailLoading] = useState(false);
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
   const [creating, setCreating] = useState(false);
+  const [query, setQuery] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const fetching = useRef(false);
   const cursorRef = useRef<number>(initialBoard?.cursor ?? -1);
 
@@ -120,6 +123,25 @@ export function HermesKanban({
     [mutate],
   );
 
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const bulkAction = useCallback(
+    async (action: string) => {
+      const ids = [...selected];
+      if (ids.length === 0) return;
+      const r = await mutate("/api/hermes/kanban/bulk", { action, ids });
+      if (r.ok) setSelected(new Set());
+    },
+    [selected, mutate],
+  );
+
   // Initial load when not server-seeded (deferred a tick so the fetch's state
   // updates land outside the effect body).
   useEffect(() => {
@@ -148,14 +170,27 @@ export function HermesKanban({
     };
   }, [pollMs, loadBoard]);
 
-  const tasks = board?.tasks ?? [];
-  const byStatus = new Map<string, typeof tasks>();
-  for (const t of tasks) {
-    if (t.status === "archived") continue;
+  const allTasks = board?.tasks ?? [];
+  const assignees = [...new Set(allTasks.map((t) => t.assignee).filter((a): a is string => !!a))].sort();
+
+  const q = query.trim().toLowerCase();
+  const matches = (t: KanbanTask) => {
+    if (assigneeFilter === "__unassigned__" && t.assignee) return false;
+    if (assigneeFilter !== "all" && assigneeFilter !== "__unassigned__" && t.assignee !== assigneeFilter) return false;
+    if (!q) return true;
+    const hay = `${t.id} ${t.title} ${t.assignee ?? ""} ${(t.skills ?? []).join(" ")} ${t.body ?? ""}`.toLowerCase();
+    return hay.includes(q);
+  };
+  const filterActive = q !== "" || assigneeFilter !== "all";
+
+  const byStatus = new Map<string, KanbanTask[]>();
+  for (const t of allTasks) {
+    if (t.status === "archived" || !matches(t)) continue;
     if (!byStatus.has(t.status)) byStatus.set(t.status, []);
     byStatus.get(t.status)!.push(t);
   }
   for (const list of byStatus.values()) list.sort((a, b) => b.priority - a.priority);
+  const shownCount = [...byStatus.values()].reduce((n, l) => n + l.length, 0);
 
   const writesEnabled = !!board?.writesEnabled;
 
@@ -169,26 +204,40 @@ export function HermesKanban({
 
   return (
     <div className="relative">
-      {(writesEnabled || toast) && (
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="min-h-[26px] flex-1">
-            {toast && (
-              <span
-                className={cn(
-                  "inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs",
-                  toast.ok ? "border-ok/25 bg-ok/10 text-ok" : "border-danger/25 bg-danger/10 text-danger",
-                )}
-              >
-                <Icon name={toast.ok ? "CircleCheck" : "CircleDot"} size={12} className="shrink-0" />
-                <span className="truncate">{toast.text}</span>
-                <button onClick={() => setToast(null)} className="ml-0.5 shrink-0 opacity-70 hover:opacity-100" aria-label="Dismiss">
-                  <Icon name="X" size={11} />
-                </button>
-              </span>
+      <div className="mb-3 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex h-8 min-w-[180px] flex-1 items-center gap-2 rounded-md border border-line bg-surface-2 px-2 text-xs">
+            <Icon name="Search" size={13} className="text-faint" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter tasks…"
+              className="w-full bg-transparent text-ink placeholder:text-faint focus:outline-none"
+            />
+            {query && (
+              <button onClick={() => setQuery("")} className="text-faint hover:text-ink" aria-label="Clear filter">
+                <Icon name="X" size={12} />
+              </button>
             )}
-          </div>
+          </label>
+          {assignees.length > 0 && (
+            <select
+              value={assigneeFilter}
+              onChange={(e) => setAssigneeFilter(e.target.value)}
+              className="h-8 rounded-md border border-line bg-surface-2 px-2 text-xs text-muted focus:outline-none"
+            >
+              <option value="all">All assignees</option>
+              <option value="__unassigned__">Unassigned</option>
+              {assignees.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          )}
+          {filterActive && <span className="shrink-0 text-[11px] text-faint">{shownCount} shown</span>}
           {writesEnabled && (
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="ml-auto flex shrink-0 items-center gap-2">
               <button
                 onClick={() => setCreating(true)}
                 className="flex items-center gap-1.5 rounded-md border border-[var(--accent-line)] bg-[var(--accent-soft)] px-2.5 py-1 text-xs font-medium text-[var(--accent)] hover:opacity-90"
@@ -207,7 +256,21 @@ export function HermesKanban({
             </div>
           )}
         </div>
-      )}
+        {toast && (
+          <span
+            className={cn(
+              "inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs",
+              toast.ok ? "border-ok/25 bg-ok/10 text-ok" : "border-danger/25 bg-danger/10 text-danger",
+            )}
+          >
+            <Icon name={toast.ok ? "CircleCheck" : "CircleDot"} size={12} className="shrink-0" />
+            <span className="truncate">{toast.text}</span>
+            <button onClick={() => setToast(null)} className="ml-0.5 shrink-0 opacity-70 hover:opacity-100" aria-label="Dismiss">
+              <Icon name="X" size={11} />
+            </button>
+          </span>
+        )}
+      </div>
 
       <div className={cn("flex gap-4 overflow-x-auto overflow-y-auto pb-3", boardHeightClass)}>
         {KANBAN_COLUMNS.map((col) => {
@@ -226,16 +289,32 @@ export function HermesKanban({
                   <p className="px-2 py-6 text-center text-xs text-faint/60">No tasks</p>
                 ) : (
                   items.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => openTask(t.id)}
-                      className={cn(
-                        "block w-full text-left",
-                        selectedId === t.id && "ring-1 ring-[var(--accent)]/50 rounded-lg",
+                    <div key={t.id} className="group flex items-start gap-1">
+                      {writesEnabled && (
+                        <button
+                          onClick={() => toggleSelect(t.id)}
+                          className={cn(
+                            "mt-3 grid size-4 shrink-0 place-items-center rounded border transition-opacity",
+                            selected.has(t.id)
+                              ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                              : "border-line text-transparent opacity-0 group-hover:opacity-100",
+                          )}
+                          aria-label={selected.has(t.id) ? "Deselect task" : "Select task"}
+                        >
+                          <Icon name="Check" size={11} />
+                        </button>
                       )}
-                    >
-                      <TaskCard task={t} />
-                    </button>
+                      <button
+                        onClick={() => openTask(t.id)}
+                        className={cn(
+                          "min-w-0 flex-1 text-left",
+                          selectedId === t.id && "rounded-lg ring-1 ring-[var(--accent)]/50",
+                          selected.has(t.id) && "rounded-lg ring-1 ring-[var(--accent)]/60",
+                        )}
+                      >
+                        <TaskCard task={t} />
+                      </button>
+                    </div>
                   ))
                 )}
               </div>
@@ -243,6 +322,28 @@ export function HermesKanban({
           );
         })}
       </div>
+
+      {writesEnabled && selected.size > 0 && (
+        <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-2 px-3 py-2 shadow-2xl">
+            <span className="text-xs font-medium text-muted">{selected.size} selected</span>
+            <span className="h-4 w-px bg-line" />
+            {BULK_ACTIONS.map((a) => (
+              <button
+                key={a.action}
+                onClick={() => void bulkAction(a.action)}
+                className={cn("rounded-md border px-2 py-1 text-xs font-medium", TONE_CLASS[a.tone])}
+              >
+                {a.label}
+              </button>
+            ))}
+            <span className="h-4 w-px bg-line" />
+            <button onClick={() => setSelected(new Set())} className="rounded-md px-2 py-1 text-xs text-faint hover:text-ink">
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
 
       {selectedId && (
         <TaskDrawer
@@ -312,6 +413,17 @@ const TONE_CLASS: Record<string, string> = {
   warn: "border-warn/30 bg-warn/10 text-warn",
   muted: "border-line bg-surface-2 text-muted hover:text-ink",
 };
+
+// Bulk actions offered in the multi-select bar. The CLI enforces the state
+// machine per task and reports which ids it couldn't transition.
+const BULK_ACTIONS: { action: TransitionAction; label: string; tone: "accent" | "ok" | "warn" | "muted" }[] = [
+  { action: "promote", label: "Promote", tone: "accent" },
+  { action: "unblock", label: "Unblock", tone: "accent" },
+  { action: "block", label: "Block", tone: "warn" },
+  { action: "schedule", label: "Schedule", tone: "muted" },
+  { action: "complete", label: "Complete", tone: "ok" },
+  { action: "archive", label: "Archive", tone: "muted" },
+];
 
 function TaskDrawer({
   detail,

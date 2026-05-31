@@ -20,7 +20,11 @@ jobs:
           fi
 
       - name: Pull latest code
-        run: git -C ~/agentic-os pull --ff-only
+        run: |
+          set -e
+          git -C ~/agentic-os fetch --prune origin
+          git -C ~/agentic-os checkout main
+          git -C ~/agentic-os reset --hard origin/main
 
       - name: Install deps
         run: |
@@ -39,6 +43,9 @@ jobs:
       - name: Restart service
         run: |
           set -e
+          # The runner has no login session, so wire up the user systemd bus.
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
           systemctl --user daemon-reload
           systemctl --user restart agentic-os
           systemctl --user is-active agentic-os
@@ -46,6 +53,8 @@ jobs:
       - name: Verify readiness
         run: |
           set -e
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
           for _ in $(seq 1 20); do
             if curl --fail --silent http://127.0.0.1:3017/api/health >/dev/null; then
               exit 0
