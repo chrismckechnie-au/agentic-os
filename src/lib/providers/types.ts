@@ -12,6 +12,7 @@ import type {
   SessionDetail,
   Skill,
   StatMetric,
+  VaultStats,
   WorkspaceSummary,
 } from "@/lib/types";
 
@@ -36,6 +37,7 @@ export interface AgentPageData {
   skills?: Skill[];
   jobs?: Job[];
   notes?: Note[];
+  vaultStats?: VaultStats;
 }
 
 /**

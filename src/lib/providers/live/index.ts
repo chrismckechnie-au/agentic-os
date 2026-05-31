@@ -123,6 +123,7 @@ export class LiveProvider implements DataProvider {
       sessions,
       activeSession: notes[0] ? noteToDetail(notes[0]) : emptySessionDetail(id, "No notes found", vault.vaultName),
       notes,
+      vaultStats: vault,
     };
   }
 

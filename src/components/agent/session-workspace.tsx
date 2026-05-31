@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, type TabDef } from "@/components/ui/tabs";
 import { Icon } from "@/components/icon";
-import { SessionList } from "@/components/agent/session-list";
+import { ObsidianNoteList, SessionList } from "@/components/agent/session-list";
 import { ChatInput } from "@/components/agent/chat-input";
 import { Terminal } from "@/components/agent/terminal";
 import { PtyTerminal } from "@/components/agent/pty-terminal";
@@ -18,6 +18,9 @@ import {
   HermesAside,
   NoteViewer,
   ObsidianAside,
+  ObsidianBacklinks,
+  ObsidianGraph,
+  ObsidianMetadata,
   PlanList,
 } from "@/components/agent/panels";
 import type {
@@ -28,6 +31,7 @@ import type {
   Session,
   SessionDetail,
   Skill,
+  VaultStats,
 } from "@/lib/types";
 import type { AgentConfig } from "@/lib/config/agents";
 
@@ -51,7 +55,8 @@ function buildPanels(
     jobs?: Job[];
     notes?: Note[];
     note?: Note;
-    vaultStats?: { notes: number; links: number; vaultName: string };
+    vaultStats?: VaultStats;
+    onSelectNote?: (noteId: string) => void;
     onResume?: (sessionId: string) => void;
     onOpenSession?: (sessionId: string) => void;
     hermesInfo?: { profile?: string; home?: string };
@@ -173,26 +178,24 @@ function buildPanels(
     const note = extras.note ?? extras.notes?.[0];
     const vs = extras.vaultStats;
     panels.notes = note ? (
-      <NoteViewer note={note} />
+      <NoteViewer note={note} notes={extras.notes} onSelectNote={extras.onSelectNote} />
     ) : (
       <Placeholder icon="FileText" text="No note selected" />
     );
-    panels.graph = (
-      <Placeholder
-        icon="Network"
-        text={
-          vs
-            ? `Graph view — ${vs.notes.toLocaleString()} notes · ${vs.links.toLocaleString()} links`
-            : "Graph view"
-        }
-      />
+    panels.graph = note ? (
+      <ObsidianGraph note={note} notes={extras.notes} onSelectNote={extras.onSelectNote} />
+    ) : (
+      <Placeholder icon="Network" text="No note selected" />
     );
-    panels.settings = (
-      <div className="divide-y divide-line">
-        <DetailRow label="Vault">{vs?.vaultName ?? "—"}</DetailRow>
-        <DetailRow label="Notes">{vs ? vs.notes.toLocaleString() : "—"}</DetailRow>
-        <DetailRow label="Links">{vs ? vs.links.toLocaleString() : "—"}</DetailRow>
-      </div>
+    panels.backlinks = note ? (
+      <ObsidianBacklinks note={note} notes={extras.notes} onSelectNote={extras.onSelectNote} />
+    ) : (
+      <Placeholder icon="Link2" text="No note selected" />
+    );
+    panels.settings = note ? (
+      <ObsidianMetadata note={note} vaultStats={vs} />
+    ) : (
+      <Placeholder icon="Settings" text="No note selected" />
     );
   }
 
@@ -232,7 +235,7 @@ export function SessionWorkspace({
   skills?: Skill[];
   jobs?: Job[];
   notes?: Note[];
-  vaultStats?: { notes: number; links: number; vaultName: string };
+  vaultStats?: VaultStats;
   /** Hermes workspace settings (active profile, home) for the Settings tab. */
   hermesInfo?: { profile?: string; home?: string };
 }) {
@@ -293,7 +296,7 @@ export function SessionWorkspace({
               id: note.id,
               agentId: "obsidian",
               title: note.title,
-              workspace: note.group,
+              workspace: note.folder ?? note.group,
               status: "completed",
               updatedAt: session?.updatedAt ?? detail.updatedAt,
               group: session?.group ?? note.group,
@@ -350,6 +353,7 @@ export function SessionWorkspace({
     notes,
     note: selectedNote,
     vaultStats,
+    onSelectNote: handleSelectSession,
     onResume: resumeInChat,
     onOpenSession: resumeInChat,
     hermesInfo,
@@ -360,12 +364,16 @@ export function SessionWorkspace({
   return (
     <>
       <div className="xl:col-span-3 max-h-[740px]">
-        <SessionList
-          sessions={initialSessions}
-          activeId={selectedId}
-          onSelect={handleSelectSession}
-          onNew={liveAgent ? startLive : undefined}
-        />
+        {agentId === "obsidian" ? (
+          <ObsidianNoteList notes={notes ?? []} activeId={selectedId} onSelect={handleSelectSession} />
+        ) : (
+          <SessionList
+            sessions={initialSessions}
+            activeId={selectedId}
+            onSelect={handleSelectSession}
+            onNew={liveAgent ? startLive : undefined}
+          />
+        )}
       </div>
 
       <div className={expanded ? "xl:col-span-9" : "xl:col-span-6"}>
@@ -456,7 +464,7 @@ export function SessionWorkspace({
               activeId={activeTab ?? defaultId}
               onActiveChange={setActiveTab}
             />
-            {!liveAgent && (
+            {!liveAgent && agentId !== "obsidian" && (
               <div className="mt-4">
                 <ChatInput
                   agentId={agentId}
@@ -479,7 +487,7 @@ export function SessionWorkspace({
           {agentId === "claude-code" && <ClaudeAside s={detail} />}
           {agentId === "codex" && <CodexAside s={detail} />}
           {agentId === "hermes" && <HermesAside memory={memory} skills={skills} jobs={jobs} />}
-          {agentId === "obsidian" && <ObsidianAside notes={notes} vaultName={vaultStats?.vaultName} />}
+          {agentId === "obsidian" && <ObsidianAside notes={notes} vaultStats={vaultStats} />}
         </div>
       )}
     </>

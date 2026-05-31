@@ -142,6 +142,16 @@ export interface WorkspaceSummary {
   agents: number;
 }
 
+export interface VaultStats {
+  notes: number;
+  links: number;
+  vaultName: string;
+  tags?: number;
+  tasks?: number;
+  openTasks?: number;
+  unresolvedLinks?: number;
+}
+
 // --- Hermes-specific concepts (memory stores, skills, jobs) ---
 export interface MemoryStore {
   label: string;
@@ -281,11 +291,43 @@ export interface HermesSessionsPage {
 }
 
 // --- Obsidian-specific ---
+export interface NoteLink {
+  raw: string;
+  target: string;
+  label: string;
+  /** Note id when the wiki link resolves to a known note in the current vault index. */
+  resolvedId?: string;
+}
+
+export interface NoteBacklink {
+  id: string;
+  title: string;
+  path: string;
+  excerpt?: string;
+}
+
+export interface NoteTaskCounts {
+  total: number;
+  completed: number;
+  open: number;
+}
+
 export interface Note {
   id: string;
   title: string;
   updatedAt: string;
   group?: string;
+  /** Vault-relative markdown path. */
+  path?: string;
+  /** Top-level folder, or "Root". */
+  folder?: string;
+  tags?: string[];
+  frontmatter?: Record<string, string | string[]>;
+  outlinks?: NoteLink[];
+  backlinks?: NoteBacklink[];
+  taskCounts?: NoteTaskCounts;
+  excerpt?: string;
+  obsidianUri?: string;
   /** Markdown body. */
   body: string;
 }
