@@ -8,6 +8,8 @@ import { SessionList } from "@/components/agent/session-list";
 import { ChatInput } from "@/components/agent/chat-input";
 import { Terminal } from "@/components/agent/terminal";
 import { PtyTerminal } from "@/components/agent/pty-terminal";
+import { HermesKanban } from "@/components/kanban/hermes-kanban";
+import { HermesSessions } from "@/components/agent/hermes-sessions";
 import {
   ChangedFiles,
   ClaudeAside,
@@ -50,6 +52,9 @@ function buildPanels(
     notes?: Note[];
     note?: Note;
     vaultStats?: { notes: number; links: number; vaultName: string };
+    onResume?: (sessionId: string) => void;
+    onOpenSession?: (sessionId: string) => void;
+    hermesInfo?: { profile?: string; home?: string };
   },
 ): { tabs: TabDef[]; panels: Record<string, React.ReactNode>; defaultId: string } {
   const panels: Record<string, React.ReactNode> = { terminal: terminalNode };
@@ -107,7 +112,11 @@ function buildPanels(
   }
 
   if (agentId === "hermes") {
-    panels.memory = extras.memory ? (
+    defaultId = "chat";
+    panels.chat = terminalNode;
+    panels.kanban = <HermesKanban onOpenSession={extras.onOpenSession} />;
+    panels.sessions = <HermesSessions onResume={extras.onResume} />;
+    panels.memory = extras.memory && extras.memory.length > 0 ? (
       <div className="space-y-3">
         {extras.memory.map((m) => (
           <div key={m.label}>
@@ -121,33 +130,40 @@ function buildPanels(
           </div>
         ))}
       </div>
-    ) : null;
-    panels.skills = (
+    ) : (
+      <Placeholder icon="Database" text="No memory stores detected" />
+    );
+    panels.skills = extras.skills && extras.skills.length > 0 ? (
       <ul className="divide-y divide-line text-sm">
-        {(extras.skills ?? []).map((sk) => (
+        {extras.skills.map((sk) => (
           <li key={sk.name} className="flex items-center justify-between py-2">
             <span className="font-mono text-muted">{sk.name}</span>
             <span className={sk.status === "active" ? "text-ok" : "text-faint"}>{sk.status}</span>
           </li>
         ))}
       </ul>
+    ) : (
+      <Placeholder icon="Sparkles" text="No skills detected" />
     );
-    panels.jobs = (
+    panels.jobs = extras.jobs && extras.jobs.length > 0 ? (
       <ul className="divide-y divide-line text-sm">
-        {(extras.jobs ?? []).map((j) => (
+        {extras.jobs.map((j) => (
           <li key={j.name} className="flex items-center justify-between py-2">
             <span className="font-mono text-muted">{j.name}</span>
             <span className="font-mono text-xs text-faint">{j.schedule ?? "—"}</span>
           </li>
         ))}
       </ul>
+    ) : (
+      <Placeholder icon="Clock" text="No scheduled jobs" />
     );
     panels.settings = (
       <div className="divide-y divide-line">
-        <DetailRow label="Active profile">research</DetailRow>
+        <DetailRow label="Active profile">{extras.hermesInfo?.profile ?? "default"}</DetailRow>
         <DetailRow label="Model">{detail.model ?? "—"}</DetailRow>
-        <DetailRow label="Log level">info</DetailRow>
-        <DetailRow label="Gateway">Telegram · Slack</DetailRow>
+        <DetailRow label="Hermes home">
+          <span className="font-mono text-xs">{extras.hermesInfo?.home ?? "—"}</span>
+        </DetailRow>
       </div>
     );
   }
@@ -200,6 +216,7 @@ export function SessionWorkspace({
   jobs,
   notes,
   vaultStats,
+  hermesInfo,
 }: {
   agentId: AgentId;
   cfg: AgentConfig;
@@ -216,22 +233,41 @@ export function SessionWorkspace({
   jobs?: Job[];
   notes?: Note[];
   vaultStats?: { notes: number; links: number; vaultName: string };
+  /** Hermes workspace settings (active profile, home) for the Settings tab. */
+  hermesInfo?: { profile?: string; home?: string };
 }) {
   const [selectedId, setSelectedId] = useState(initialDetail.id);
   const [detail, setDetail] = useState<SessionDetail>(initialDetail);
   const [live, setLive] = useState(false);
   const [liveKey, setLiveKey] = useState(0); // bump to start a fresh PTY session
+  const [resumeId, setResumeId] = useState<string | undefined>(undefined);
+  const [activeTab, setActiveTab] = useState<string | undefined>(undefined);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const startLive = useCallback(() => {
     if (!liveAgent) return;
+    setResumeId(undefined); // a fresh session, not a resume
     setLiveKey((k) => k + 1);
     setLive(true);
   }, [liveAgent]);
 
   const stopLive = useCallback(() => setLive(false), []);
+
+  // Resume a past session in the live Chat terminal (from Sessions tab or a
+  // Kanban task's linked session). Switches to the Chat tab and starts a PTY
+  // with --resume <id>.
+  const resumeInChat = useCallback(
+    (sessionId: string) => {
+      if (!liveAgent) return;
+      setResumeId(sessionId);
+      setLiveKey((k) => k + 1);
+      setLive(true);
+      setActiveTab("chat");
+    },
+    [liveAgent],
+  );
 
   // Auto-open a live session once when arriving via ?new=1.
   const autoStarted = useRef(false);
@@ -295,6 +331,7 @@ export function SessionWorkspace({
       key={liveKey}
       agentId={agentId}
       cwd={detail.sandbox}
+      resumeId={resumeId}
       accent={cfg.accent}
       heightClass={termHeight}
       onClose={stopLive}
@@ -313,6 +350,9 @@ export function SessionWorkspace({
     notes,
     note: selectedNote,
     vaultStats,
+    onResume: resumeInChat,
+    onOpenSession: resumeInChat,
+    hermesInfo,
   });
 
   const cardTitle = loading ? "Loading…" : live ? `Live · ${cfg.name}` : detail.title;
@@ -409,7 +449,13 @@ export function SessionWorkspace({
             </div>
           </CardHeader>
           <CardBody className="pt-0">
-            <Tabs tabs={tabs} panels={panels} defaultId={defaultId} />
+            <Tabs
+              tabs={tabs}
+              panels={panels}
+              defaultId={defaultId}
+              activeId={activeTab ?? defaultId}
+              onActiveChange={setActiveTab}
+            />
             {!liveAgent && (
               <div className="mt-4">
                 <ChatInput

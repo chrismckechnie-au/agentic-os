@@ -79,6 +79,12 @@ export interface SessionDetail extends Session {
   permissions?: string;
   /** Codex/agents plan checklist. */
   plan?: { label: string; done: boolean; current?: boolean }[];
+  /**
+   * Session id to resume in a live CLI. For Hermes this is the most recent
+   * descendant of a session chain (parent_session_id), so "Resume in Chat"
+   * continues where the conversation actually ended.
+   */
+  resumeId?: string;
 }
 
 export interface HealthItem {
@@ -189,6 +195,87 @@ export interface KanbanTask {
   consecutiveFailures?: number;
   /** For running cards, e.g. "4m 12s". */
   runtime?: string;
+}
+
+// --- Hermes kanban: richer detail DTOs (task drawer, board polling) ---
+// These mirror the refuelr board SQLite tables (task_comments, task_links,
+// task_runs, task_events) while the generic KanbanTask stays the shared shape.
+export interface KanbanComment {
+  id: number;
+  author?: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface KanbanLinkRef {
+  id: string;
+  title: string;
+  status: TaskStatus;
+}
+
+export interface KanbanRun {
+  id: number;
+  profile?: string;
+  stepKey?: string;
+  status?: string;
+  outcome?: string;
+  summary?: string;
+  error?: string;
+  startedAt?: string;
+  endedAt?: string;
+  /** e.g. "4m 12s". */
+  duration?: string;
+}
+
+export interface KanbanEvent {
+  id: number;
+  kind: string;
+  runId?: number;
+  summary?: string;
+  createdAt: string;
+}
+
+export interface KanbanTaskDetail extends KanbanTask {
+  createdBy?: string;
+  workspacePath?: string;
+  result?: string;
+  lastFailureError?: string;
+  /** Hermes session that worked the task (links Kanban → Sessions). */
+  sessionId?: string;
+  modelOverride?: string;
+  currentStepKey?: string;
+  comments: KanbanComment[];
+  parents: KanbanLinkRef[];
+  children: KanbanLinkRef[];
+  runs: KanbanRun[];
+  events: KanbanEvent[];
+}
+
+export interface KanbanBoard {
+  tasks: KanbanTask[];
+  boardSlug?: string;
+  source: "live" | "mock" | "degraded";
+  /** Max task_events.id — clients poll this to detect board changes. */
+  cursor: number;
+  stats: { active: number; running: number; blocked: number; review: number; done: number };
+}
+
+// --- Hermes sessions (chat history from the active profile's state.db) ---
+export interface HermesSessionRow extends Session {
+  source?: string;
+  model?: string;
+  parentId?: string;
+  messageCount?: number;
+  toolCallCount?: number;
+}
+
+export interface HermesSessionsPage {
+  sessions: HermesSessionRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+  query?: string;
 }
 
 // --- Obsidian-specific ---

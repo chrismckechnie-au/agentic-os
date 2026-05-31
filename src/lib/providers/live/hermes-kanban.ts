@@ -1,9 +1,17 @@
 import "server-only";
 
-import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
-import type { KanbanTask, TaskStatus } from "@/lib/types";
+import type {
+  KanbanComment,
+  KanbanEvent,
+  KanbanLinkRef,
+  KanbanRun,
+  KanbanTask,
+  KanbanTaskDetail,
+  TaskStatus,
+} from "@/lib/types";
+import { resolveHermesHome } from "@/lib/hermes/paths";
 
 // node:sqlite requires Node ≥ 22. On older runtimes we degrade gracefully.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,7 +68,7 @@ export interface KanbanDbResolution {
 }
 
 function hermesHome(): string {
-  return process.env.HERMES_HOME || path.join(/* turbopackIgnore: true */ os.homedir(), ".hermes");
+  return resolveHermesHome();
 }
 
 function boardDbPath(slug: string): string {
@@ -233,28 +241,179 @@ export function readTasks(dbPath = resolveDbPath()): KanbanTask[] {
       )
       .all() as DbRow[];
 
-    return rows.map((r): KanbanTask => {
-      const status = (VALID_STATUSES.includes(r.status as TaskStatus) ? r.status : "triage") as TaskStatus;
-      const id = String(r.id);
-      return {
-        id,
-        title: String(r.title ?? "Untitled"),
-        body: r.body ? String(r.body) : undefined,
-        status,
-        priority: Number(r.priority ?? 0),
-        assignee: r.assignee ? String(r.assignee) : undefined,
-        skills: parseSkills(r.skills),
-        branchName: r.branch_name ? String(r.branch_name) : undefined,
-        workspaceKind: r.workspace_kind ? String(r.workspace_kind) : undefined,
-        createdAt: ago(r.created_at) ?? "—",
-        startedAt: ago(r.started_at),
-        completedAt: ago(r.completed_at),
-        deps: deps.get(id),
-        consecutiveFailures: Number(r.consecutive_failures ?? 0) || undefined,
-        runtime: status === "running" ? durationSince(r.started_at) : undefined,
-      };
-    });
+    return rows.map((r): KanbanTask => mapTaskRow(r, deps.get(String(r.id))));
   } finally {
     db.close();
+  }
+}
+
+function mapTaskRow(r: DbRow, depCount?: number): KanbanTask {
+  const status = (VALID_STATUSES.includes(r.status as TaskStatus) ? r.status : "triage") as TaskStatus;
+  const id = String(r.id);
+  return {
+    id,
+    title: String(r.title ?? "Untitled"),
+    body: r.body ? String(r.body) : undefined,
+    status,
+    priority: Number(r.priority ?? 0),
+    assignee: r.assignee ? String(r.assignee) : undefined,
+    skills: parseSkills(r.skills),
+    branchName: r.branch_name ? String(r.branch_name) : undefined,
+    workspaceKind: r.workspace_kind ? String(r.workspace_kind) : undefined,
+    createdAt: ago(r.created_at) ?? "—",
+    startedAt: ago(r.started_at),
+    completedAt: ago(r.completed_at),
+    deps: depCount,
+    consecutiveFailures: Number(r.consecutive_failures ?? 0) || undefined,
+    runtime: status === "running" ? durationSince(r.started_at) : undefined,
+  };
+}
+
+/** Duration between two epochs -> "4m 12s" / "1h 03m". */
+function durationBetween(start: unknown, end: unknown): string | undefined {
+  const a = Number(start);
+  const b = Number(end);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return undefined;
+  const ms = (b < 1e12 ? b * 1000 : b) - (a < 1e12 ? a * 1000 : a);
+  if (ms < 0) return undefined;
+  let s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  s -= h * 3600;
+  const m = Math.floor(s / 60);
+  s -= m * 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  return `${m}m ${String(s).padStart(2, "0")}s`;
+}
+
+/** Best-effort one-line summary from a JSON event payload. */
+function summarizePayload(raw: unknown): string | undefined {
+  if (raw == null) return undefined;
+  const text = String(raw).trim();
+  if (!text) return undefined;
+  try {
+    const obj = JSON.parse(text);
+    if (obj && typeof obj === "object") {
+      const pick = obj.message ?? obj.summary ?? obj.status ?? obj.detail ?? obj.note;
+      if (pick != null) return String(pick).replace(/\s+/g, " ").slice(0, 200);
+      return Object.keys(obj).slice(0, 4).join(", ").slice(0, 200) || undefined;
+    }
+  } catch {
+    // not JSON — fall through to a raw snippet
+  }
+  return text.replace(/\s+/g, " ").slice(0, 200);
+}
+
+/** Max task_events.id — a cheap change cursor clients poll for live refresh. */
+export function readBoardCursor(dbPath = resolveDbPath()): number {
+  const db = tryOpenDb(dbPath);
+  if (!db) return 0;
+  try {
+    const r = db.prepare("SELECT COALESCE(MAX(id), 0) AS c FROM task_events").get() as DbRow;
+    return Number(r?.c ?? 0);
+  } catch {
+    return 0;
+  } finally {
+    db.close();
+  }
+}
+
+/** Full task drawer payload: task + comments, links, runs, recent events. */
+export function readTaskDetail(id: string, dbPath = resolveDbPath()): KanbanTaskDetail | null {
+  const db = tryOpenDb(dbPath);
+  if (!db) return null;
+  try {
+    const t = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as DbRow | undefined;
+    if (!t) return null;
+
+    const base = mapTaskRow(t);
+
+    const comments: KanbanComment[] = safeAll(
+      db,
+      "SELECT id, author, body, created_at FROM task_comments WHERE task_id = ? ORDER BY id",
+      [id],
+    ).map((c) => ({
+      id: Number(c.id),
+      author: c.author ? String(c.author) : undefined,
+      body: String(c.body ?? ""),
+      createdAt: ago(c.created_at) ?? "—",
+    }));
+
+    // task_links(parent_id, child_id): parents block this task; children depend on it.
+    const parents: KanbanLinkRef[] = safeAll(
+      db,
+      `SELECT t.id, t.title, t.status FROM task_links l JOIN tasks t ON t.id = l.parent_id WHERE l.child_id = ?`,
+      [id],
+    ).map(toLinkRef);
+    const children: KanbanLinkRef[] = safeAll(
+      db,
+      `SELECT t.id, t.title, t.status FROM task_links l JOIN tasks t ON t.id = l.child_id WHERE l.parent_id = ?`,
+      [id],
+    ).map(toLinkRef);
+
+    const runs: KanbanRun[] = safeAll(
+      db,
+      `SELECT id, profile, step_key, status, outcome, summary, error, started_at, ended_at
+       FROM task_runs WHERE task_id = ? ORDER BY id DESC LIMIT 20`,
+      [id],
+    ).map((r) => ({
+      id: Number(r.id),
+      profile: r.profile ? String(r.profile) : undefined,
+      stepKey: r.step_key ? String(r.step_key) : undefined,
+      status: r.status ? String(r.status) : undefined,
+      outcome: r.outcome ? String(r.outcome) : undefined,
+      summary: r.summary ? String(r.summary).replace(/\s+/g, " ").slice(0, 300) : undefined,
+      error: r.error ? String(r.error).replace(/\s+/g, " ").slice(0, 300) : undefined,
+      startedAt: ago(r.started_at),
+      endedAt: ago(r.ended_at),
+      duration: durationBetween(r.started_at, r.ended_at),
+    }));
+
+    const events: KanbanEvent[] = safeAll(
+      db,
+      `SELECT id, kind, run_id, payload, created_at FROM task_events WHERE task_id = ? ORDER BY id DESC LIMIT 30`,
+      [id],
+    ).map((e) => ({
+      id: Number(e.id),
+      kind: String(e.kind ?? "event"),
+      runId: e.run_id != null ? Number(e.run_id) : undefined,
+      summary: summarizePayload(e.payload),
+      createdAt: ago(e.created_at) ?? "—",
+    }));
+
+    return {
+      ...base,
+      createdBy: t.created_by ? String(t.created_by) : undefined,
+      workspacePath: t.workspace_path ? String(t.workspace_path) : undefined,
+      result: t.result ? String(t.result) : undefined,
+      lastFailureError: t.last_failure_error ? String(t.last_failure_error) : undefined,
+      sessionId: t.session_id ? String(t.session_id) : undefined,
+      modelOverride: t.model_override ? String(t.model_override) : undefined,
+      currentStepKey: t.current_step_key ? String(t.current_step_key) : undefined,
+      comments,
+      parents,
+      children,
+      runs,
+      events,
+    };
+  } finally {
+    db.close();
+  }
+}
+
+function toLinkRef(r: DbRow): KanbanLinkRef {
+  return {
+    id: String(r.id),
+    title: String(r.title ?? "Untitled"),
+    status: (VALID_STATUSES.includes(r.status as TaskStatus) ? r.status : "triage") as TaskStatus,
+  };
+}
+
+/** Run a query that may reference a table the board doesn't have; [] on error. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function safeAll(db: any, sql: string, params: unknown[]): DbRow[] {
+  try {
+    return db.prepare(sql).all(...params) as DbRow[];
+  } catch {
+    return [];
   }
 }

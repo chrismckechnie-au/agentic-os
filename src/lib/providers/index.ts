@@ -1,12 +1,13 @@
 import "server-only";
 
 import type { DataProvider } from "@/lib/providers/types";
-import type { KanbanTask } from "@/lib/types";
+import type { KanbanBoard, KanbanTask } from "@/lib/types";
 import { MockProvider } from "@/lib/providers/mock";
 import { LiveProvider } from "@/lib/providers/live";
 import {
   dbExists,
   getDbHealth,
+  readBoardCursor,
   readTasks,
   resolveDb,
 } from "@/lib/providers/live/hermes-kanban";
@@ -100,5 +101,28 @@ export async function getKanbanTasks(): Promise<KanbanResult> {
     boardSlug: resolved.boardSlug,
     resolution: resolved.resolution,
     reason: resolved.reason,
+  };
+}
+
+/**
+ * Board view for the live Kanban workspace: tasks + summary stats + a change
+ * cursor (max task_events.id) the client polls to know when to refetch.
+ */
+export async function getKanbanBoard(): Promise<KanbanBoard> {
+  const result = await getKanbanTasks();
+  const active = result.tasks.filter((t) => t.status !== "archived");
+  const cursor = result.source === "live" ? readBoardCursor(result.dbPath) : 0;
+  return {
+    tasks: result.tasks,
+    boardSlug: result.boardSlug,
+    source: result.source,
+    cursor,
+    stats: {
+      active: active.length,
+      running: active.filter((t) => t.status === "running").length,
+      blocked: active.filter((t) => t.status === "blocked").length,
+      review: active.filter((t) => t.status === "review").length,
+      done: active.filter((t) => t.status === "done").length,
+    },
   };
 }

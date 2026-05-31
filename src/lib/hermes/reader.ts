@@ -1,28 +1,17 @@
 import "server-only";
 
-import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import type { Job, MemoryStore, SessionStatus, Skill } from "@/lib/types";
+import { resolveHermesHome } from "@/lib/hermes/paths";
+
+export { hermesAvailable, resolveHermesHome } from "@/lib/hermes/paths";
 
 // Live reader for the Hermes agent (Nous Research hermes-agent), modelled on the
 // official refuelr-ops dashboard plugin (`plugin_api.py`). Reads the real
 // ~/.hermes layout directly via node:fs — no hermes process, no Python. All
 // readers degrade to empty/graceful fallback when the home dir is absent, so the
 // page falls back to mock. Server-only.
-
-/** Resolve the Hermes home: $HERMES_HOME or ~/.hermes (matches get_hermes_home()). */
-export function resolveHermesHome(): string {
-  return process.env.HERMES_HOME || path.join(/* turbopackIgnore: true */ os.homedir(), ".hermes");
-}
-
-export function hermesAvailable(home = resolveHermesHome()): boolean {
-  try {
-    return fs.statSync(home).isDirectory();
-  } catch {
-    return false;
-  }
-}
 
 // --- helpers ----------------------------------------------------------------
 
@@ -108,7 +97,7 @@ export function readJobs(home = resolveHermesHome()): Job[] {
 }
 
 export function readSkills(home = resolveHermesHome()): Skill[] {
-  const root = path.join(home, "profile", "skills");
+  const root = path.join(home, "skills");
   const found = new Map<string, boolean>(); // name -> isActive
 
   // Skill names referenced by any enabled job count as "active".
@@ -120,7 +109,7 @@ export function readSkills(home = resolveHermesHome()): Skill[] {
     if (Array.isArray(skills)) for (const s of skills) activeNames.add(String(s).toLowerCase());
   }
 
-  // Walk profile/skills/**, collecting dirs that look like a skill (contain a
+  // Walk skills/**, collecting dirs that look like a skill (contain a
   // SKILL.md / manifest) or leaf dirs.
   const walk = (dir: string, depth: number) => {
     let entries: fs.Dirent[];
@@ -154,10 +143,11 @@ export function readSkills(home = resolveHermesHome()): Skill[] {
 }
 
 export function readMemory(home = resolveHermesHome()): MemoryStore[] {
+  // Bounded, fast targets only — avoid walking the large kanban/ worktree tree.
   const targets: { label: string; rel: string[] }[] = [
     { label: "kanban", rel: ["kanban.db"] },
-    { label: "job output", rel: ["cron", "output"] },
-    { label: "skills", rel: ["profile", "skills"] },
+    { label: "skills", rel: ["skills"] },
+    { label: "memories", rel: ["memories"] },
     { label: "plugins", rel: ["plugins"] },
   ];
   const sized = targets

@@ -18,6 +18,7 @@ import { readVaultStats } from "@/lib/obsidian/reader";
 import {
   readSessionDetail as readHermesDetail,
 } from "@/lib/hermes/state";
+import { readActiveProfile, resolveHermesHome } from "@/lib/hermes/paths";
 import { noteToDetail } from "@/lib/providers/live/obsidian";
 
 export function generateStaticParams() {
@@ -73,6 +74,11 @@ export default async function AgentPage({
     if (detail) initialDetail = detail;
   }
 
+  const hermesInfo =
+    agent === "hermes"
+      ? { profile: readActiveProfile() ?? undefined, home: resolveHermesHome() }
+      : undefined;
+
   const realData = agent !== "obsidian";
   const liveAgent = data.agent.liveCliAvailable;
   const autoStartLive = isNew === "1" && liveAgent;
@@ -101,6 +107,7 @@ export default async function AgentPage({
           jobs={data.jobs}
           notes={data.notes}
           vaultStats={vaultStats}
+          hermesInfo={hermesInfo}
         />
       </div>
     </div>

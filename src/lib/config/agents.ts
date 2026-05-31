@@ -64,7 +64,9 @@ export const AGENTS: Record<AgentId, AgentConfig> = {
     icon: "Send",
     liveCli: { bin: "hermes" },
     tabs: [
-      { id: "terminal", label: "Terminal" },
+      { id: "chat", label: "Chat" },
+      { id: "kanban", label: "Kanban" },
+      { id: "sessions", label: "Sessions" },
       { id: "memory", label: "Memory" },
       { id: "skills", label: "Skills" },
       { id: "jobs", label: "Jobs" },
