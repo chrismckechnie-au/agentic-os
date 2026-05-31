@@ -319,7 +319,7 @@ export const AGENT_STATS: Record<AgentId, StatMetric[]> = {
     { id: "ob-notes", label: "Notes", value: "1,284", delta: "+12 today", trend: "up", icon: "FileText", spark: [1240, 1255, 1262, 1270, 1276, 1280, 1284] },
     { id: "ob-links", label: "Backlinks", value: "9,612", delta: "+31 today", trend: "up", icon: "Link2", spark: [9400, 9480, 9520, 9560, 9580, 9600, 9612] },
     { id: "ob-tags", label: "Tags", value: "214", hint: "Across 9 vaults", icon: "Hash", spark: [200, 204, 206, 208, 210, 212, 214] },
-    { id: "ob-synced", label: "Sync Status", value: "Synced", hint: "Last sync 2m ago", icon: "RefreshCw", spark: [1, 1, 1, 1, 1, 1, 1] },
+    { id: "ob-tasks", label: "Open Tasks", value: "2", hint: "4 tasks indexed", icon: "ListChecks", spark: [4, 4, 3, 3, 2, 2, 2] },
   ],
 };
 
@@ -354,11 +354,18 @@ export const OBSIDIAN_NOTES: Note[] = [
     title: "Project Overview",
     updatedAt: "10m ago",
     group: "Today",
-    body: `# Project Overview
+    path: "Projects/Project Overview.md",
+    tags: ["refuelr", "platform"],
+    body: `---
+title: Project Overview
+tags: [refuelr, platform]
+---
+# Project Overview
 
 ## Refuelr Platform
 
 Refuelr is an AI-powered platform that helps users build and scale their projects with intelligent automation.
+See [[Meeting notes — product sync]] and [[Research notes — RAG architectures]] for current context.
 
 ### Key Features
 
@@ -379,24 +386,31 @@ Refuelr is an AI-powered platform that helps users build and scale their project
     title: "Meeting notes — product sync",
     updatedAt: "1h ago",
     group: "Today",
+    path: "Operations/Meeting notes — product sync.md",
+    tags: ["meeting", "product"],
     body: `# Product Sync
 
 - Reviewed Q3 roadmap
 - Agreed to ship social login next sprint
-- Open question: rate limiting strategy`,
+- Open question: rate limiting strategy
+- Follow-up: [[Project Overview]] needs launch checklist`,
   },
   {
     id: "research-notes",
     title: "Research notes — RAG architectures",
     updatedAt: "1d ago",
     group: "Yesterday",
+    path: "Research/RAG architectures.md",
+    tags: ["research", "rag"],
     body: `# RAG architectures
 
 Comparing vector databases for retrieval-augmented generation.
 
 - pgvector — simple, lives in Postgres
 - Qdrant — fast, great filtering
-- Weaviate — hybrid search`,
+- Weaviate — hybrid search
+
+Related: [[Project Overview]] and [[Unresolved vendor memo]]`,
   },
 ];
 

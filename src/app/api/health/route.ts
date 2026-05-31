@@ -23,6 +23,29 @@ function dirExists(target: string): boolean {
   }
 }
 
+function resolveBindHost(value: string | undefined): {
+  hostname: string;
+  configured: string | null;
+  source: string;
+  ok: boolean;
+} {
+  const configured = value?.trim() || "";
+
+  if (!configured) {
+    return { hostname: "127.0.0.1", configured: null, source: "default-loopback", ok: true };
+  }
+
+  if (/^(tailscale|tailscale-ip|tailnet)$/i.test(configured)) {
+    return { hostname: "tailscale", configured, source: "tailscale", ok: true };
+  }
+
+  if (/^auto$/i.test(configured)) {
+    return { hostname: "auto", configured, source: "auto", ok: true };
+  }
+
+  return { hostname: configured, configured, source: "configured", ok: true };
+}
+
 function resolveKanbanForHealth(): {
   dbPath: string;
   boardSlug?: string;
@@ -65,13 +88,17 @@ function resolveKanbanForHealth(): {
 export async function GET() {
   const runtimeMajor = Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10);
   const runtimeOk = Number.isFinite(runtimeMajor) && runtimeMajor >= 22;
-  const host = process.env.AGENTIC_HOST ?? "127.0.0.1";
-  const loopbackHost = ["127.0.0.1", "localhost", "::1", "[::1]"].includes(host);
+  const bind = resolveBindHost(process.env.AGENTIC_HOST);
   const vaultPath = process.env.VAULT_PATH?.trim() || null;
   const kanban = resolveKanbanForHealth();
   const checks = {
     runtime: { ok: runtimeOk, detail: process.version },
-    bindHost: { ok: loopbackHost, detail: host },
+    bindHost: {
+      ok: bind.ok,
+      detail: bind.hostname,
+      configured: bind.configured,
+      source: bind.source,
+    },
     vault: { ok: vaultPath ? dirExists(vaultPath) : null, path: vaultPath },
     kanban: {
       ok: fileExists(kanban.dbPath),
@@ -81,14 +108,17 @@ export async function GET() {
     },
   };
 
-  return NextResponse.json({
+  const payload = {
     ok: checks.runtime.ok && checks.bindHost.ok,
     version: pkg.version,
     runtime: process.version,
     dataSourceMode: process.env.DATA_SOURCE ?? "mock",
-    host,
+    host: bind.hostname,
+    configuredHost: bind.configured,
     runRouteEnabled: /^(1|true)$/i.test(process.env.AGENTIC_ENABLE_RUN_ROUTE ?? ""),
     timestamp: new Date().toISOString(),
     checks,
-  });
+  };
+
+  return NextResponse.json(payload, { status: payload.ok ? 200 : 503 });
 }

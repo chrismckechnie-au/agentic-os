@@ -63,9 +63,9 @@ export function TopBar({
   const systemStyle = SYSTEM_STYLES[systemState] ?? SYSTEM_STYLES.healthy;
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-line bg-canvas/70 px-6 backdrop-blur">
+    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-canvas/70 px-4 backdrop-blur sm:gap-4 sm:px-6">
       {/* Search (command palette deferred — input is inert for now) */}
-      <label className="flex h-9 w-full max-w-md items-center gap-2.5 rounded-lg border border-line bg-surface-2 px-3 text-sm text-faint">
+      <label className="flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-line bg-surface-2 px-3 text-sm text-faint sm:max-w-md">
         <Icon name="Search" size={16} />
         <input
           placeholder="Search anything..."
@@ -73,7 +73,7 @@ export function TopBar({
         />
       </label>
 
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         {/* Org switcher */}
         <div className="relative hidden sm:block">
           <button

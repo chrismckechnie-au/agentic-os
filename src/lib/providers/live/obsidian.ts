@@ -39,6 +39,7 @@ export function noteToSession(note: Note): Session {
     agentId: "obsidian",
     title: note.title,
     status: "completed",
+    workspace: note.folder ?? note.group,
     updatedAt: label,
     group,
   };
@@ -49,7 +50,7 @@ export function noteToDetail(note: Note): SessionDetail {
   return {
     ...session,
     title: note.title,
-    workspace: note.group,
+    workspace: note.folder ?? note.group,
     transcript: [{ role: "agent", kind: "output", text: note.body }],
   };
 }

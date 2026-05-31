@@ -1,7 +1,14 @@
 // Server-only. Reads Obsidian vault markdown files from VAULT_PATH env var.
 import fs from "node:fs";
 import path from "node:path";
-import type { Note } from "@/lib/types";
+import type { Note, VaultStats } from "@/lib/types";
+import {
+  extractTaskCounts,
+  firstHeading,
+  parseFrontmatter,
+  prepareNotes,
+  stripFrontmatter,
+} from "@/lib/obsidian/parse";
 
 function getVaultPath(): string | null {
   const p = process.env.VAULT_PATH;
@@ -12,38 +19,6 @@ function getVaultPath(): string | null {
     /* ignore */
   }
   return null;
-}
-
-// Tiny YAML frontmatter parser — no new deps.
-// Returns { title?, tags?, updated? } from the --- block if present.
-function parseFrontmatter(content: string): { title?: string; tags?: string[]; updated?: string } {
-  if (!content.startsWith("---")) return {};
-  const end = content.indexOf("\n---", 3);
-  if (end === -1) return {};
-  const block = content.slice(4, end);
-  const result: { title?: string; tags?: string[]; updated?: string } = {};
-  for (const line of block.split("\n")) {
-    const colon = line.indexOf(":");
-    if (colon === -1) continue;
-    const key = line.slice(0, colon).trim();
-    const val = line.slice(colon + 1).trim().replace(/^["']|["']$/g, "");
-    if (key === "title" && val) result.title = val;
-    if (key === "updated" || key === "date") result.updated = val;
-    if (key === "tags") {
-      // Support: tags: [a, b] or tags: a, b
-      result.tags = val
-        .replace(/^\[|\]$/g, "")
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
-    }
-  }
-  return result;
-}
-
-function firstHeading(content: string): string | null {
-  const m = content.match(/^#\s+(.+)$/m);
-  return m ? m[1].trim() : null;
 }
 
 function collectMarkdownFiles(dir: string, results: string[] = []): string[] {
@@ -74,7 +49,6 @@ export function readNotes(limit = 200): Note[] {
   const notes: Note[] = [];
 
   for (const file of files) {
-    if (notes.length >= limit) break;
     try {
       const stat = fs.statSync(file);
       const content = fs.readFileSync(file, "utf-8");
@@ -95,7 +69,11 @@ export function readNotes(limit = 200): Note[] {
         title,
         updatedAt,
         group,
-        body: content.slice(0, 2000), // cap body for UI perf
+        path: id,
+        folder: group,
+        tags: fm.tags,
+        frontmatter: fm.fields,
+        body: stripFrontmatter(content).slice(0, 6000), // cap body for UI perf
       });
     } catch {
       /* skip unreadable files */
@@ -104,25 +82,65 @@ export function readNotes(limit = 200): Note[] {
 
   // Sort by mtime descending (most recently modified first)
   notes.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-  return notes;
+  return prepareNotes(notes.slice(0, limit), path.basename(vault));
 }
 
-export function readVaultStats(): { notes: number; links: number; vaultName: string } {
+export function readVaultStats(): VaultStats {
   const vault = getVaultPath();
-  if (!vault) return { notes: 0, links: 0, vaultName: "—" };
+  if (!vault) return { notes: 0, links: 0, vaultName: "—", tags: 0, tasks: 0, openTasks: 0, unresolvedLinks: 0 };
 
   const files = collectMarkdownFiles(vault);
   let links = 0;
+  let tasks = 0;
+  let openTasks = 0;
+  const tags = new Set<string>();
+  const allNotes: Note[] = [];
 
   for (const file of files) {
     try {
+      const stat = fs.statSync(file);
       const content = fs.readFileSync(file, "utf-8");
       const matches = content.match(/\[\[[^\]]+\]\]/g);
       if (matches) links += matches.length;
+
+      const fm = parseFrontmatter(content);
+      for (const tag of fm.tags) tags.add(tag);
+      const id = path.relative(vault, file).replace(/\\/g, "/");
+      const parts = id.split("/");
+      const group = parts.length > 1 ? parts[0] : "Root";
+      const note: Note = {
+        id,
+        title: fm.title ?? firstHeading(content) ?? path.basename(file, ".md"),
+        updatedAt: fm.updated ?? stat.mtime.toISOString(),
+        group,
+        path: id,
+        folder: group,
+        tags: fm.tags,
+        frontmatter: fm.fields,
+        body: stripFrontmatter(content),
+      };
+      allNotes.push(note);
+      const counts = extractTaskCounts(note.body);
+      tasks += counts.total;
+      openTasks += counts.open;
     } catch {
       /* skip */
     }
   }
 
-  return { notes: files.length, links, vaultName: path.basename(vault) };
+  const prepared = prepareNotes(allNotes, path.basename(vault));
+  const unresolvedLinks = prepared.reduce(
+    (sum, note) => sum + (note.outlinks ?? []).filter((link) => !link.resolvedId).length,
+    0,
+  );
+
+  return {
+    notes: files.length,
+    links,
+    vaultName: path.basename(vault),
+    tags: tags.size,
+    tasks,
+    openTasks,
+    unresolvedLinks,
+  };
 }

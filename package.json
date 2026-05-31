@@ -12,7 +12,8 @@
     "build": "next build",
     "prestart": "node scripts/check-runtime.mjs",
     "start": "cross-env NODE_ENV=production node server.mjs",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:obsidian": "node --experimental-strip-types --test src/lib/obsidian/parse.test.ts"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

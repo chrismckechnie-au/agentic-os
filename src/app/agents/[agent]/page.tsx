@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
 import { getProvider } from "@/lib/providers";
 import { AGENT_ORDER, AGENTS, isAgentId } from "@/lib/config/agents";
-import type { AgentId, SessionDetail } from "@/lib/types";
+import type { AgentId, SessionDetail, VaultStats } from "@/lib/types";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { SessionWorkspace } from "@/components/agent/session-workspace";
@@ -48,10 +48,10 @@ export default async function AgentPage({
   const cfg = AGENTS[agent];
   let initialDetail: SessionDetail = data.activeSession;
 
-  let vaultStats: { notes: number; links: number; vaultName: string } | undefined;
+  let vaultStats: VaultStats | undefined;
   if (agent === "obsidian") {
     if (data.notes && data.notes.length > 0) {
-      vaultStats = readVaultStats();
+      vaultStats = data.vaultStats ?? readVaultStats();
       const selectedNote = reqSession
         ? data.notes.find((note) => note.id === reqSession) ?? data.notes[0]
         : data.notes[0];
@@ -87,7 +87,7 @@ export default async function AgentPage({
     <div style={accentStyle(cfg.accent)}>
       <PageHeader title={cfg.name} subtitle={cfg.tagline} icon={cfg.icon} accent={cfg.accent} />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {data.stats.map((stat) => (
           <StatCard key={stat.id} stat={stat} />
         ))}
