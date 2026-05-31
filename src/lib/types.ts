@@ -258,6 +258,8 @@ export interface KanbanBoard {
   /** Max task_events.id — clients poll this to detect board changes. */
   cursor: number;
   stats: { active: number; running: number; blocked: number; review: number; done: number };
+  /** Whether server-side Kanban writes are enabled (AGENTIC_ENABLE_KANBAN_WRITES). */
+  writesEnabled: boolean;
 }
 
 // --- Hermes sessions (chat history from the active profile's state.db) ---

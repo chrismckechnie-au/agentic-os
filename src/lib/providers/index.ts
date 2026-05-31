@@ -11,6 +11,7 @@ import {
   readTasks,
   resolveDb,
 } from "@/lib/providers/live/hermes-kanban";
+import { kanbanWritesEnabled } from "@/lib/hermes/kanban-write";
 
 let cached: DataProvider | null = null;
 
@@ -124,5 +125,6 @@ export async function getKanbanBoard(): Promise<KanbanBoard> {
       review: active.filter((t) => t.status === "review").length,
       done: active.filter((t) => t.status === "done").length,
     },
+    writesEnabled: kanbanWritesEnabled(),
   };
 }

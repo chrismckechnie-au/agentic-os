@@ -10,7 +10,13 @@ export async function GET() {
     return NextResponse.json(await getKanbanBoard());
   } catch {
     return NextResponse.json(
-      { tasks: [], source: "mock", cursor: 0, stats: { active: 0, running: 0, blocked: 0, review: 0, done: 0 } },
+      {
+        tasks: [],
+        source: "mock",
+        cursor: 0,
+        stats: { active: 0, running: 0, blocked: 0, review: 0, done: 0 },
+        writesEnabled: false,
+      },
       { status: 200 },
     );
   }
