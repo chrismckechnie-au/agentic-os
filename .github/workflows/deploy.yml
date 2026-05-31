@@ -39,6 +39,7 @@ jobs:
       - name: Restart service
         run: |
           set -e
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           systemctl --user daemon-reload
           systemctl --user restart agentic-os
           systemctl --user is-active agentic-os
@@ -46,6 +47,7 @@ jobs:
       - name: Verify readiness
         run: |
           set -e
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           for _ in $(seq 1 20); do
             if curl --fail --silent http://127.0.0.1:3017/api/health >/dev/null; then
               exit 0
