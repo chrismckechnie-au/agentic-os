@@ -4,7 +4,7 @@
 #          systemctl --user enable --now agentic-os
 # Persist: loginctl enable-linger <username>
 # Logs:    journalctl --user -u agentic-os -f
-# Tunnel:  ssh -L 3017:localhost:3017 user@box  →  http://localhost:3017
+# Tailnet: http://<tailscale-ip>:3017
 
 [Unit]
 Description=Agentic OS Dashboard
@@ -15,6 +15,8 @@ WorkingDirectory=%h/agentic-os
 Environment=NODE_ENV=production
 Environment=PATH=%h/.hermes/node/bin:%h/.hermes/hermes-agent/venv/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=-%h/.agentic-os.env
+# Keep the dashboard reachable over Tailscale without binding every interface.
+Environment=AGENTIC_HOST=tailscale
 ExecStart=%h/.hermes/node/bin/node server.mjs
 Restart=on-failure
 RestartSec=5

@@ -8,6 +8,7 @@
 
 import { createServer } from "node:http";
 import { execSync } from "node:child_process";
+import { isIP } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
@@ -17,13 +18,49 @@ import pty from "node-pty";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3017", 10);
-const hostname = process.env.AGENTIC_HOST || "127.0.0.1";
+const bind = resolveBindHost(process.env.AGENTIC_HOST);
+const hostname = bind.hostname;
 const isWin = process.platform === "win32";
 
-const app = next({ dev });
+const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 const packageJson = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
 const runRouteEnabled = /^(1|true)$/i.test(process.env.AGENTIC_ENABLE_RUN_ROUTE ?? "");
+
+function resolveTailscaleIp() {
+  try {
+    const out = execSync("tailscale ip -4", { stdio: ["ignore", "pipe", "ignore"], timeout: 2000 })
+      .toString()
+      .trim();
+    return out.split(/\r?\n/).find((line) => isIP(line.trim()) === 4)?.trim() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveBindHost(value) {
+  const configured = value?.trim() || "";
+
+  if (!configured) {
+    return { hostname: "127.0.0.1", configured: null, source: "default-loopback", ok: true };
+  }
+
+  if (/^(tailscale|tailscale-ip|tailnet)$/i.test(configured)) {
+    const tailscaleIp = resolveTailscaleIp();
+    return tailscaleIp
+      ? { hostname: tailscaleIp, configured, source: "tailscale", ok: true }
+      : { hostname: "127.0.0.1", configured, source: "tailscale-unavailable", ok: false };
+  }
+
+  if (/^auto$/i.test(configured)) {
+    const tailscaleIp = resolveTailscaleIp();
+    return tailscaleIp
+      ? { hostname: tailscaleIp, configured, source: "tailscale-auto", ok: true }
+      : { hostname: "127.0.0.1", configured, source: "auto-loopback", ok: true };
+  }
+
+  return { hostname: configured, configured, source: "configured", ok: true };
+}
 
 // ── Agent allowlist (authoritative — never trust the client) ────────────────
 // Each agent maps to a fixed binary + base args. `resume(id)` appends history flags.
@@ -133,13 +170,17 @@ function resolveKanbanForHealth() {
 function healthPayload() {
   const runtimeMajor = Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10);
   const runtimeOk = Number.isFinite(runtimeMajor) && runtimeMajor >= 22;
-  const loopbackHost = ["127.0.0.1", "localhost", "::1", "[::1]"].includes(hostname);
   const vaultPath = process.env.VAULT_PATH?.trim() || null;
   const kanban = resolveKanbanForHealth();
 
   const checks = {
     runtime: { ok: runtimeOk, detail: process.version },
-    bindHost: { ok: loopbackHost, detail: hostname },
+    bindHost: {
+      ok: bind.ok,
+      detail: hostname,
+      configured: bind.configured,
+      source: bind.source,
+    },
     vault: { ok: vaultPath ? dirExists(vaultPath) : null, path: vaultPath },
     kanban: {
       ok: fileExists(kanban.dbPath),
@@ -155,6 +196,7 @@ function healthPayload() {
     runtime: process.version,
     dataSourceMode: process.env.DATA_SOURCE ?? "mock",
     host: hostname,
+    configuredHost: bind.configured,
     runRouteEnabled,
     timestamp: new Date().toISOString(),
     checks,
@@ -350,7 +392,7 @@ app.prepare().then(() => {
 
   server.listen(port, hostname, () => {
     console.log(
-      `> Agentic OS ready on http://localhost:${port} (${dev ? "development" : "production"}) — PTY at /api/pty`,
+      `> Agentic OS ready on http://${hostname}:${port} (${dev ? "development" : "production"}) — PTY at /api/pty`,
     );
   });
 });

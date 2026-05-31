@@ -26,6 +26,12 @@ jobs:
           git -C ~/agentic-os checkout main
           git -C ~/agentic-os reset --hard origin/main
 
+      - name: Install user service
+        run: |
+          set -e
+          mkdir -p ~/.config/systemd/user
+          cp ~/agentic-os/deploy/agentic-os.service ~/.config/systemd/user/agentic-os.service
+
       - name: Install deps
         run: |
           set -e
@@ -55,12 +61,18 @@ jobs:
           set -e
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+          health_host="${AGENTIC_HEALTH_HOST:-}"
+          if [ -z "$health_host" ] && command -v tailscale >/dev/null 2>&1; then
+            health_host="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
+          fi
+          health_host="${health_host:-127.0.0.1}"
+          health_url="http://${health_host}:3017/api/health"
           for _ in $(seq 1 20); do
-            if curl --fail --silent http://127.0.0.1:3017/api/health >/dev/null; then
+            if curl --fail --silent "$health_url" >/dev/null; then
               exit 0
             fi
             sleep 1
           done
-          echo "Readiness check failed"
+          echo "Readiness check failed for ${health_url}"
           journalctl --user -u agentic-os -n 80 --no-pager || true
           exit 1
