@@ -14,13 +14,23 @@ export function Tabs({
   panels,
   defaultId,
   className,
+  activeId,
+  onActiveChange,
 }: {
   tabs: TabDef[];
   panels: Record<string, React.ReactNode>;
   defaultId?: string;
   className?: string;
+  /** Controlled active tab. When set, the parent owns tab selection. */
+  activeId?: string;
+  onActiveChange?: (id: string) => void;
 }) {
-  const [active, setActive] = useState(defaultId ?? tabs[0]?.id);
+  const [internal, setInternal] = useState(defaultId ?? tabs[0]?.id);
+  const active = activeId ?? internal;
+  const setActive = (id: string) => {
+    setInternal(id);
+    onActiveChange?.(id);
+  };
 
   return (
     <div className={className}>
