@@ -350,6 +350,7 @@ export function HermesKanban({
           detail={detail}
           loading={detailLoading}
           writesEnabled={writesEnabled}
+          boardTasks={allTasks}
           onClose={closeDrawer}
           onOpenSession={onOpenSession}
           onMutate={(body) => mutateTask(selectedId, body)}
@@ -429,6 +430,7 @@ function TaskDrawer({
   detail,
   loading,
   writesEnabled,
+  boardTasks,
   onClose,
   onOpenSession,
   onMutate,
@@ -436,6 +438,7 @@ function TaskDrawer({
   detail: KanbanTaskDetail | null;
   loading: boolean;
   writesEnabled: boolean;
+  boardTasks: KanbanTask[];
   onClose: () => void;
   onOpenSession?: (sessionId: string) => void;
   onMutate: (body: unknown) => Promise<{ ok: boolean; message?: string }>;
@@ -501,7 +504,7 @@ function TaskDrawer({
               </Section>
             )}
 
-            {(detail.parents.length > 0 || detail.children.length > 0) && (
+            {(writesEnabled || detail.parents.length > 0 || detail.children.length > 0) && (
               <Section title="Links">
                 {detail.parents.length > 0 && (
                   <LinkGroup
@@ -519,6 +522,14 @@ function TaskDrawer({
                     onUnlink={
                       writesEnabled ? (otherId) => void onMutate({ op: "unlink", otherId, direction: "blocks" }) : undefined
                     }
+                  />
+                )}
+                {writesEnabled && (
+                  <AddLink
+                    taskId={detail.id}
+                    boardTasks={boardTasks}
+                    existing={new Set([detail.id, ...detail.parents.map((p) => p.id), ...detail.children.map((c) => c.id)])}
+                    onMutate={onMutate}
                   />
                 )}
               </Section>
@@ -882,5 +893,107 @@ function RunOutcome({ outcome }: { outcome: string }) {
   const bad = /fail|error/i.test(outcome);
   return (
     <span className={cn("font-medium", ok ? "text-ok" : bad ? "text-danger" : "text-faint")}>{outcome}</span>
+  );
+}
+
+function AddLink({
+  taskId,
+  boardTasks,
+  existing,
+  onMutate,
+}: {
+  taskId: string;
+  boardTasks: KanbanTask[];
+  existing: Set<string>;
+  onMutate: (body: unknown) => Promise<{ ok: boolean; message?: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [direction, setDirection] = useState<"depends-on" | "blocks">("depends-on");
+  const [busy, setBusy] = useState(false);
+
+  void taskId; // self is already excluded via `existing`
+  const s = q.trim().toLowerCase();
+  const results = boardTasks
+    .filter((c) => !existing.has(c.id) && c.status !== "archived")
+    .filter((c) => !s || c.id.toLowerCase().includes(s) || c.title.toLowerCase().includes(s))
+    .slice(0, 8);
+
+  const add = async (otherId: string) => {
+    setBusy(true);
+    try {
+      const r = await onMutate({ op: "link", otherId, direction });
+      if (r.ok) {
+        setOpen(false);
+        setQ("");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-1 flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline"
+      >
+        <Icon name="Plus" size={12} /> Add link
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded-lg border border-line bg-surface-2/50 p-2">
+      <div className="mb-2 flex items-center gap-1.5">
+        <button
+          onClick={() => setDirection("depends-on")}
+          className={cn(
+            "rounded-md border px-2 py-0.5 text-[11px] font-medium",
+            direction === "depends-on" ? TONE_CLASS.accent : TONE_CLASS.muted,
+          )}
+        >
+          Depends on
+        </button>
+        <button
+          onClick={() => setDirection("blocks")}
+          className={cn(
+            "rounded-md border px-2 py-0.5 text-[11px] font-medium",
+            direction === "blocks" ? TONE_CLASS.accent : TONE_CLASS.muted,
+          )}
+        >
+          Blocks
+        </button>
+        <button onClick={() => setOpen(false)} className="ml-auto text-faint hover:text-ink" aria-label="Cancel">
+          <Icon name="X" size={13} />
+        </button>
+      </div>
+      <input
+        autoFocus
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search tasks by id or title…"
+        className="mb-1.5 h-8 w-full rounded-md border border-line bg-surface px-2 text-xs text-ink placeholder:text-faint focus:outline-none"
+      />
+      <ul className="max-h-44 space-y-1 overflow-y-auto">
+        {results.length === 0 ? (
+          <li className="px-1 py-2 text-center text-xs text-faint">No matching tasks</li>
+        ) : (
+          results.map((c) => (
+            <li key={c.id}>
+              <button
+                onClick={() => add(c.id)}
+                disabled={busy}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-surface-2 disabled:opacity-50"
+              >
+                <StatusDot status={c.status} />
+                <span className="font-mono text-faint">{c.id}</span>
+                <span className="min-w-0 flex-1 truncate text-muted">{c.title}</span>
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+    </div>
   );
 }
