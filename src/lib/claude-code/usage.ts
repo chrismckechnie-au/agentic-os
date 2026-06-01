@@ -144,6 +144,12 @@ async function refreshToken(creds: StoredCredentials): Promise<StoredCredentials
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    if (res.status === 429) {
+      throw new ClaudeUsageError(
+        `Claude OAuth refresh is rate limited (${res.status}). The dashboard will retry automatically. ${body}`,
+        "RATE_LIMITED",
+      );
+    }
     throw new ClaudeUsageError(
       `Token refresh failed (${res.status}). Re-authenticate by running \`claude\` on this machine. ${body}`,
       "REFRESH_FAILED",
@@ -170,10 +176,23 @@ async function refreshToken(creds: StoredCredentials): Promise<StoredCredentials
   return updated;
 }
 
-async function ensureFreshToken(): Promise<string> {
+async function ensureFreshToken(
+  opts: { allowStaleOnRateLimit?: boolean } = {},
+): Promise<string> {
   let creds = await readCredentials();
   if (creds.claudeAiOauth.expiresAt - EXPIRY_SKEW_MS <= Date.now()) {
-    creds = await refreshToken(creds);
+    try {
+      creds = await refreshToken(creds);
+    } catch (error) {
+      if (
+        opts.allowStaleOnRateLimit &&
+        error instanceof ClaudeUsageError &&
+        error.code === "RATE_LIMITED"
+      ) {
+        return creds.claudeAiOauth.accessToken;
+      }
+      throw error;
+    }
   }
   return creds.claudeAiOauth.accessToken;
 }
@@ -196,7 +215,7 @@ function toCardWindow(window: RawWindow | null): UsageCardWindow | null {
 }
 
 async function fetchRawUsage(): Promise<RawUsage> {
-  let token = await ensureFreshToken();
+  let token = await ensureFreshToken({ allowStaleOnRateLimit: true });
 
   const doGet = async (accessToken: string) =>
     fetch(USAGE_URL, { method: "GET", headers: usageHeaders(accessToken) });
@@ -233,6 +252,7 @@ async function fetchRawUsage(): Promise<RawUsage> {
 
 export async function getClaudeUsage(opts: { force?: boolean } = {}): Promise<UsageCard> {
   const { cacheMs } = runtimeConfig();
+  const staleCache = cache?.data ?? null;
 
   if (!opts.force && cache && Date.now() - cache.ts < cacheMs) {
     return cache.data;
@@ -255,6 +275,16 @@ export async function getClaudeUsage(opts: { force?: boolean } = {}): Promise<Us
 
   try {
     return await inFlight;
+  } catch (error) {
+    if (
+      !opts.force &&
+      staleCache &&
+      error instanceof ClaudeUsageError &&
+      error.code === "RATE_LIMITED"
+    ) {
+      return staleCache;
+    }
+    throw error;
   } finally {
     inFlight = null;
   }

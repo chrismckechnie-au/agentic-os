@@ -1,6 +1,6 @@
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -35,26 +35,25 @@ afterEach(async () => {
   }
 });
 
-test("returns the latest usable 5h and 7d windows from Codex session snapshots", async () => {
+test("prefers the freshest usable session snapshot even when session_index.jsonl is stale", async () => {
   const home = await createCodexHome([
     {
       rel: "session_index.jsonl",
       content: [
-        JSON.stringify({ id: "older", updated_at: "2026-05-31T12:00:00.000Z" }),
-        JSON.stringify({ id: "latest", updated_at: "2026-06-01T10:45:47.308Z" }),
+        JSON.stringify({ id: "older", updated_at: "2026-06-01T09:04:27.815Z" }),
       ].join("\n"),
     },
     {
-      rel: "sessions/2026/05/31/rollout-older.jsonl",
+      rel: "sessions/2026/06/01/rollout-older.jsonl",
       content: JSON.stringify({
-        timestamp: "2026-05-31T12:00:00.000Z",
+        timestamp: "2026-06-01T09:04:27.815Z",
         type: "event_msg",
         payload: {
           type: "token_count",
           rate_limits: {
             limit_id: "codex",
-            primary: { used_percent: 15, window_minutes: 300, resets_at: 1780230000 },
-            secondary: { used_percent: 9, window_minutes: 10080, resets_at: 1780750000 },
+            primary: { used_percent: 19, window_minutes: 300, resets_at: 1780309964 },
+            secondary: { used_percent: 21, window_minutes: 10080, resets_at: 1780846053 },
             plan_type: "prolite",
             rate_limit_reached_type: null,
           },
@@ -62,16 +61,16 @@ test("returns the latest usable 5h and 7d windows from Codex session snapshots",
       }),
     },
     {
-      rel: "sessions/2026/06/01/rollout-latest.jsonl",
+      rel: "sessions/2026/05/31/rollout-fresh-but-unindexed.jsonl",
       content: [
         JSON.stringify({
-          timestamp: "2026-06-01T10:44:56.937Z",
+          timestamp: "2026-06-01T11:31:45.112Z",
           type: "event_msg",
           payload: {
             type: "token_count",
             rate_limits: {
               limit_id: "codex",
-              primary: { used_percent: 0, window_minutes: 0, resets_at: 1780309964 },
+              primary: { used_percent: 0, window_minutes: 0, resets_at: 1780314065 },
               secondary: null,
               plan_type: "prolite",
               rate_limit_reached_type: null,
@@ -79,14 +78,14 @@ test("returns the latest usable 5h and 7d windows from Codex session snapshots",
           },
         }),
         JSON.stringify({
-          timestamp: "2026-06-01T10:45:47.308Z",
+          timestamp: "2026-06-01T11:32:29.304Z",
           type: "event_msg",
           payload: {
             type: "token_count",
             rate_limits: {
               limit_id: "codex",
-              primary: { used_percent: 44, window_minutes: 300, resets_at: 1780314065 },
-              secondary: { used_percent: 24, window_minutes: 10080, resets_at: 1780846053 },
+              primary: { used_percent: 51, window_minutes: 300, resets_at: 1780314065 },
+              secondary: { used_percent: 26, window_minutes: 10080, resets_at: 1780846053 },
               plan_type: "prolite",
               rate_limit_reached_type: null,
             },
@@ -97,18 +96,29 @@ test("returns the latest usable 5h and 7d windows from Codex session snapshots",
   ]);
 
   process.env.CODEX_HOME = home;
+  await utimes(
+    join(home, "sessions/2026/06/01/rollout-older.jsonl"),
+    new Date("2026-06-01T09:04:30.000Z"),
+    new Date("2026-06-01T09:04:30.000Z"),
+  );
+  await utimes(
+    join(home, "sessions/2026/05/31/rollout-fresh-but-unindexed.jsonl"),
+    new Date("2026-06-01T11:32:48.293Z"),
+    new Date("2026-06-01T11:32:48.293Z"),
+  );
+
   const usage = await getCodexRateLimits({ force: true });
 
-  assert.equal(usage.fiveHour?.pct, 44);
+  assert.equal(usage.fiveHour?.pct, 51);
   assert.equal(usage.fiveHour?.windowDurationMins, 300);
-  assert.equal(usage.sevenDay?.pct, 24);
+  assert.equal(usage.sevenDay?.pct, 26);
   assert.equal(usage.sevenDay?.windowDurationMins, 10080);
   assert.equal(usage.planType, "prolite");
   assert.equal(usage.source, "session");
-  assert.equal(usage.updatedAt, "2026-06-01T10:45:47.308Z");
+  assert.equal(usage.updatedAt, "2026-06-01T11:32:29.304Z");
 });
 
-test("throws NO_DATA when the Codex session index is missing", async () => {
+test("throws NO_DATA when no Codex session files exist", async () => {
   const home = await mkdtemp(join(tmpdir(), "agentic-os-codex-rate-limits-missing-"));
   process.env.CODEX_HOME = home;
 

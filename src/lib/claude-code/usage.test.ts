@@ -144,6 +144,44 @@ test("retries exactly once after a 401 from the usage endpoint", async () => {
   ]);
 });
 
+test("uses the current access token when refresh is rate limited but usage still succeeds", async () => {
+  const file = await createCredentialsFile({
+    claudeAiOauth: {
+      accessToken: "stale-but-usable",
+      refreshToken: "refresh-blocked",
+      expiresAt: Date.now() - 60_000,
+      scopes: ["user:inference", "user:profile"],
+    },
+  });
+  process.env.CLAUDE_CREDENTIALS_PATH = file;
+
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: string | URL) => {
+    const url = String(input);
+    calls.push(url);
+    if (calls.length === 1) {
+      return jsonResponse(429, {
+        error: { type: "rate_limit_error", message: "Rate limited. Please try again later." },
+      });
+    }
+
+    return jsonResponse(200, {
+      five_hour: { utilization: 28, resets_at: "2026-06-01T14:00:00Z" },
+      seven_day: { utilization: 16, resets_at: "2026-06-07T00:59:59Z" },
+      seven_day_opus: null,
+      seven_day_sonnet: null,
+    });
+  }) as typeof fetch;
+
+  const usage = await getClaudeUsage({ force: true });
+  assert.equal(usage.fiveHour?.pct, 28);
+  assert.equal(usage.sevenDay?.pct, 16);
+  assert.deepEqual(calls, [
+    "https://platform.claude.com/v1/oauth/token",
+    "https://api.anthropic.com/api/oauth/usage",
+  ]);
+});
+
 test("dedupes concurrent callers behind a shared in-flight request", async () => {
   const file = await createCredentialsFile({
     claudeAiOauth: {
@@ -201,4 +239,45 @@ test("reuses the cached snapshot for rapid sequential calls", async () => {
   assert.equal(first.fiveHour?.pct, 18.4);
   assert.equal(second.sevenDay?.pct, 9.7);
   assert.equal(usageCalls, 1);
+});
+
+test("falls back to the last cached snapshot when Anthropic rate limits a refresh", async () => {
+  const file = await createCredentialsFile({
+    claudeAiOauth: {
+      accessToken: "cached-access",
+      refreshToken: "cached-refresh",
+      expiresAt: Date.now() + 3_600_000,
+      scopes: ["user:inference", "user:profile"],
+    },
+  });
+  process.env.CLAUDE_CREDENTIALS_PATH = file;
+  process.env.CLAUDE_USAGE_CACHE_MS = "1";
+
+  let phase: "seed" | "limited" = "seed";
+  globalThis.fetch = (async (input: string | URL) => {
+    const url = String(input);
+    if (phase === "seed") {
+      assert.equal(url, "https://api.anthropic.com/api/oauth/usage");
+      return jsonResponse(200, {
+        five_hour: { utilization: 12, resets_at: "2026-06-01T14:00:00Z" },
+        seven_day: { utilization: 7, resets_at: "2026-06-07T00:59:59Z" },
+        seven_day_opus: null,
+        seven_day_sonnet: null,
+      });
+    }
+
+    assert.equal(url, "https://api.anthropic.com/api/oauth/usage");
+    return jsonResponse(429, {
+      error: { type: "rate_limit_error", message: "Rate limited. Please try again later." },
+    });
+  }) as typeof fetch;
+
+  const first = await getClaudeUsage();
+  phase = "limited";
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const second = await getClaudeUsage();
+
+  assert.equal(first.fiveHour?.pct, 12);
+  assert.equal(second.fiveHour?.pct, 12);
+  assert.equal(second.sevenDay?.pct, 7);
 });

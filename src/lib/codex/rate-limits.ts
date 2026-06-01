@@ -4,12 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_CACHE_MS = 180_000;
-const SESSION_SCAN_LIMIT = 40;
-
-interface SessionIndexEntry {
-  id: string;
-  updated_at: string;
-}
+const SESSION_SCAN_LIMIT = 120;
 
 interface RawRateLimitWindow {
   used_percent?: number;
@@ -60,6 +55,7 @@ type CacheEntry = { data: CodexRateLimitsCard; ts: number };
 type SnapshotCandidate = {
   updatedAt: string | null;
   snapshot: RawRateLimits;
+  fileMtimeMs: number;
 };
 
 let cache: CacheEntry | null = null;
@@ -70,53 +66,59 @@ function runtimeConfig() {
   const cacheMs = Number(process.env.CODEX_RATE_LIMITS_CACHE_MS ?? DEFAULT_CACHE_MS);
   return {
     codexHome: home,
-    sessionIndexPath: path.join(home, "session_index.jsonl"),
     sessionsDir: path.join(home, "sessions"),
     cacheMs: Number.isFinite(cacheMs) && cacheMs > 0 ? cacheMs : DEFAULT_CACHE_MS,
   };
 }
 
-function findSessionFile(id: string, updatedAt: string, sessionsDir: string): string | null {
-  const date = new Date(updatedAt);
-  if (Number.isNaN(date.getTime())) return null;
-
-  const yyyy = date.getUTCFullYear();
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  const dir = path.join(sessionsDir, String(yyyy), mm, dd);
-  if (!fs.existsSync(dir)) return null;
-
-  const file = fs.readdirSync(dir).find((entry) => entry.endsWith(`${id}.jsonl`));
-  return file ? path.join(dir, file) : null;
-}
-
-function readIndexEntries(): SessionIndexEntry[] {
-  const { sessionIndexPath } = runtimeConfig();
-  if (!fs.existsSync(sessionIndexPath)) {
+function listRecentSessionFiles(sessionsDir: string): string[] {
+  if (!fs.existsSync(sessionsDir)) {
     throw new CodexRateLimitsError(
-      `Could not read Codex session index at ${sessionIndexPath}. Is Codex being used on this machine?`,
+      `Could not read Codex session files at ${sessionsDir}. Is Codex being used on this machine?`,
       "NO_DATA",
     );
   }
 
-  const lines = fs.readFileSync(sessionIndexPath, "utf-8").split("\n").filter((line) => line.trim());
-  const entries: SessionIndexEntry[] = [];
+  const pendingDirs = [sessionsDir];
+  const files: Array<{ filePath: string; mtimeMs: number }> = [];
 
-  for (const line of lines) {
+  while (pendingDirs.length > 0) {
+    const dir = pendingDirs.pop();
+    if (!dir) continue;
+
+    let entries: fs.Dirent[];
     try {
-      const parsed = JSON.parse(line) as SessionIndexEntry;
-      if (parsed.id && parsed.updated_at) entries.push(parsed);
+      entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
-      // skip malformed lines
+      continue;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        pendingDirs.push(fullPath);
+        continue;
+      }
+
+      if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
+
+      try {
+        files.push({
+          filePath: fullPath,
+          mtimeMs: fs.statSync(fullPath).mtimeMs,
+        });
+      } catch {
+        // skip unreadable files
+      }
     }
   }
 
-  if (entries.length === 0) {
-    throw new CodexRateLimitsError("Codex session index is present but contains no sessions.", "NO_DATA");
+  if (files.length === 0) {
+    throw new CodexRateLimitsError("No Codex session files were found on this machine.", "NO_DATA");
   }
 
-  entries.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-  return entries;
+  files.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return files.slice(0, SESSION_SCAN_LIMIT).map((entry) => entry.filePath);
 }
 
 function normalizeWindow(window: RawRateLimitWindow | null | undefined): CodexRateLimitWindow | null {
@@ -154,6 +156,7 @@ function snapshotIsUsable(snapshot: RawRateLimits): boolean {
 function extractLatestSnapshot(filePath: string): SnapshotCandidate | null {
   const lines = fs.readFileSync(filePath, "utf-8").split("\n").filter((line) => line.trim());
   let latestAny: SnapshotCandidate | null = null;
+  const fileMtimeMs = fs.statSync(filePath).mtimeMs;
 
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     try {
@@ -176,6 +179,7 @@ function extractLatestSnapshot(filePath: string): SnapshotCandidate | null {
       const candidate: SnapshotCandidate = {
         updatedAt: parsed.timestamp ?? null,
         snapshot: parsed.payload.rate_limits,
+        fileMtimeMs,
       };
       if (!latestAny) latestAny = candidate;
       if (snapshotIsUsable(candidate.snapshot)) return candidate;
@@ -187,26 +191,37 @@ function extractLatestSnapshot(filePath: string): SnapshotCandidate | null {
   return latestAny;
 }
 
+function candidateSortTime(candidate: SnapshotCandidate): number {
+  const updatedAtMs = candidate.updatedAt ? new Date(candidate.updatedAt).getTime() : Number.NaN;
+  return Number.isFinite(updatedAtMs) ? updatedAtMs : candidate.fileMtimeMs;
+}
+
 function readLatestSnapshot(): SnapshotCandidate {
   const { sessionsDir } = runtimeConfig();
-  const entries = readIndexEntries().slice(0, SESSION_SCAN_LIMIT);
-  let fallback: SnapshotCandidate | null = null;
+  const files = listRecentSessionFiles(sessionsDir);
+  let latestUsable: SnapshotCandidate | null = null;
+  let latestAny: SnapshotCandidate | null = null;
 
-  for (const entry of entries) {
-    const filePath = findSessionFile(entry.id, entry.updated_at, sessionsDir);
-    if (!filePath) continue;
-
+  for (const filePath of files) {
     try {
       const candidate = extractLatestSnapshot(filePath);
       if (!candidate) continue;
-      if (!fallback) fallback = candidate;
-      if (snapshotIsUsable(candidate.snapshot)) return candidate;
+      if (!latestAny || candidateSortTime(candidate) > candidateSortTime(latestAny)) {
+        latestAny = candidate;
+      }
+      if (
+        snapshotIsUsable(candidate.snapshot) &&
+        (!latestUsable || candidateSortTime(candidate) > candidateSortTime(latestUsable))
+      ) {
+        latestUsable = candidate;
+      }
     } catch {
       // skip unreadable files
     }
   }
 
-  if (fallback) return fallback;
+  if (latestUsable) return latestUsable;
+  if (latestAny) return latestAny;
   throw new CodexRateLimitsError("No Codex rate-limit snapshots were found in recent session files.", "NO_DATA");
 }
 
@@ -265,6 +280,7 @@ export async function getCodexRateLimits(
 export const __internal = {
   normalizeWindow,
   extractLatestSnapshot,
+  listRecentSessionFiles,
   runtimeConfig,
   resetCache() {
     cache = null;
