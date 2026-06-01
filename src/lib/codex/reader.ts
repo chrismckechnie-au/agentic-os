@@ -110,8 +110,16 @@ function parseSessionFile(filePath: string): {
   return result;
 }
 
+let _sessionCache: { ts: number; sessions: CodexSession[] } | null = null;
+const SESSION_CACHE_TTL = 30_000;
+
 export function readSessions(limit = 50): CodexSession[] {
   if (!fs.existsSync(SESSION_INDEX)) return [];
+
+  const now = Date.now();
+  if (_sessionCache && now - _sessionCache.ts < SESSION_CACHE_TTL) {
+    return _sessionCache.sessions.slice(0, limit);
+  }
 
   const lines = fs.readFileSync(SESSION_INDEX, "utf-8").split("\n").filter((l) => l.trim());
   const entries: { id: string; thread_name: string; updated_at: string }[] = [];
@@ -125,14 +133,15 @@ export function readSessions(limit = 50): CodexSession[] {
     }
   }
 
-  // Sort newest first
+  // Sort newest first; fetch more than limit so cache is useful for smaller limit calls.
   entries.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-  const recent = entries.slice(0, limit);
+  const FETCH = Math.max(limit * 2, 100);
+  const recent = entries.slice(0, FETCH);
 
-  return recent.map((e) => {
+  const result = recent.map((e) => {
     const diff = Date.now() - new Date(e.updated_at).getTime();
     const diffMin = Math.floor(diff / 60_000);
-    const status = diffMin < 5 ? "active" : diffMin < 60 ? "in_progress" : "completed";
+    const status = (diffMin < 5 ? "active" : diffMin < 60 ? "in_progress" : "completed") as CodexSession["status"];
     const { label, group } = relativeTime(e.updated_at);
 
     // Try to read cwd from session file (best-effort, skip if slow)
@@ -165,6 +174,9 @@ export function readSessions(limit = 50): CodexSession[] {
       hitLimit,
     };
   });
+
+  _sessionCache = { ts: now, sessions: result };
+  return result.slice(0, limit);
 }
 
 function isInstructionNoise(text: string): boolean {

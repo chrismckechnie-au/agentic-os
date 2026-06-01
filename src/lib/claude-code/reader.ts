@@ -73,7 +73,32 @@ function hasRateLimitSignal(lines: string[]): boolean {
   return false;
 }
 
-function parseJsonlFile(filePath: string): {
+// Read only the head and tail of a JSONL file — avoids loading multi-MB session files
+// for simple metadata. Head covers firstUserMsg/cwd/firstTimestamp; tail covers
+// lastTimestamp and rate-limit signals.
+function readHeadTail(filePath: string, headBytes = 8192, tailBytes = 4096): string[] {
+  const fd = fs.openSync(filePath, "r");
+  try {
+    const { size } = fs.fstatSync(fd);
+    const readSize = Math.min(size, headBytes + tailBytes);
+    const buf = Buffer.allocUnsafe(readSize);
+    let bytesRead = 0;
+    // head
+    const headRead = Math.min(headBytes, size);
+    bytesRead = fs.readSync(fd, buf, 0, headRead, 0);
+    // tail (only if file is larger than head)
+    if (size > headBytes) {
+      const tailStart = Math.max(headBytes, size - tailBytes);
+      const tailRead = size - tailStart;
+      bytesRead += fs.readSync(fd, buf, headRead, tailRead, tailStart);
+    }
+    return buf.slice(0, bytesRead).toString("utf-8").split("\n").filter((l) => l.trim());
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function parseJsonlFile(filePath: string, metaOnly = false): {
   firstUserMsg: string | null;
   lastTimestamp: string | null;
   firstTimestamp: string | null;
@@ -100,8 +125,11 @@ function parseJsonlFile(filePath: string): {
     hitLimit: false,
   };
 
-  const content = fs.readFileSync(filePath, "utf-8");
-  const lines = content.split("\n").filter((l) => l.trim());
+  // For session list metadata, only read head+tail to avoid loading MB-sized files.
+  const lines = metaOnly
+    ? readHeadTail(filePath)
+    : fs.readFileSync(filePath, "utf-8").split("\n").filter((l) => l.trim());
+
   result.hitLimit = hasRateLimitSignal(lines);
 
   for (const line of lines) {
@@ -119,7 +147,7 @@ function parseJsonlFile(filePath: string): {
         result.firstUserMsg = text.replace(/[\r\n\t]+/g, " ").trim().slice(0, 100);
       }
 
-      if (msg.type === "assistant" && msg.message?.usage) {
+      if (!metaOnly && msg.type === "assistant" && msg.message?.usage) {
         const u = msg.message.usage;
         const inp = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
         const cache = u.cache_read_input_tokens ?? 0;
@@ -138,61 +166,90 @@ function parseJsonlFile(filePath: string): {
   return result;
 }
 
+// Module-level cache: avoids re-scanning on every request within the same process.
+let _sessionCache: { ts: number; sessions: ClaudeSession[] } | null = null;
+const SESSION_CACHE_TTL = 30_000; // 30 s
+
+function collectJsonlFiles(): { filePath: string; projectDir: string; mtime: number }[] {
+  const out: { filePath: string; projectDir: string; mtime: number }[] = [];
+  let projectDirs: string[];
+  try {
+    projectDirs = fs.readdirSync(CLAUDE_DIR).filter((f) => {
+      try { return fs.statSync(path.join(CLAUDE_DIR, f)).isDirectory(); } catch { return false; }
+    });
+  } catch {
+    return out;
+  }
+  for (const projectDir of projectDirs) {
+    const projectPath = path.join(CLAUDE_DIR, projectDir);
+    try {
+      const files = fs.readdirSync(projectPath).filter((f) => f.endsWith(".jsonl"));
+      for (const f of files) {
+        const fp = path.join(projectPath, f);
+        try { out.push({ filePath: fp, projectDir, mtime: fs.statSync(fp).mtimeMs }); } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+  }
+  return out;
+}
+
 export function readSessions(limit = 50): ClaudeSession[] {
   if (!fs.existsSync(CLAUDE_DIR)) return [];
 
+  const now = Date.now();
+  if (_sessionCache && now - _sessionCache.ts < SESSION_CACHE_TTL) {
+    return _sessionCache.sessions.slice(0, limit);
+  }
+
+  // Pre-sort by mtime so we only parse the N most-recently-modified files.
+  const FETCH = Math.max(limit * 2, 200);
+  const candidates = collectJsonlFiles()
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, FETCH);
+
   const sessions: ClaudeSession[] = [];
 
-  const projectDirs = fs
-    .readdirSync(CLAUDE_DIR)
-    .filter((f) => fs.statSync(path.join(CLAUDE_DIR, f)).isDirectory());
+  for (const { filePath, projectDir } of candidates) {
+    const sessionId = path.basename(filePath, ".jsonl");
+    try {
+      const parsed = parseJsonlFile(filePath, true); // metaOnly: head+tail read, skip token counts
+      if (!parsed.firstUserMsg || !parsed.lastTimestamp) continue;
 
-  for (const projectDir of projectDirs) {
-    const projectPath = path.join(CLAUDE_DIR, projectDir);
-    const jsonlFiles = fs.readdirSync(projectPath).filter((f) => f.endsWith(".jsonl"));
+      const diff = now - new Date(parsed.lastTimestamp).getTime();
+      const diffMin = Math.floor(diff / 60_000);
+      const status =
+        diffMin < 5 ? "active" : diffMin < 60 ? "in_progress" : "completed";
 
-    for (const jsonlFile of jsonlFiles) {
-      const sessionId = jsonlFile.replace(".jsonl", "");
-      const filePath = path.join(projectPath, jsonlFile);
+      const { label, group } = relativeTime(parsed.lastTimestamp);
+      const workspace = parsed.cwd ? path.basename(parsed.cwd) : projectDir;
 
-      try {
-        const parsed = parseJsonlFile(filePath);
-        if (!parsed.firstUserMsg || !parsed.lastTimestamp) continue;
-
-        const diff = Date.now() - new Date(parsed.lastTimestamp).getTime();
-        const diffMin = Math.floor(diff / 60_000);
-        const status =
-          diffMin < 5 ? "active" : diffMin < 60 ? "in_progress" : "completed";
-
-        const { label, group } = relativeTime(parsed.lastTimestamp);
-        const workspace = parsed.cwd ? path.basename(parsed.cwd) : projectDir;
-
-        sessions.push({
-          id: sessionId,
-          agentId: "claude-code",
-          title: parsed.firstUserMsg,
-          workspace,
-          status,
-          updatedAt: label,
-          group,
-          model: parsed.model,
-          gitBranch: parsed.gitBranch,
-          totalTokens: parsed.totalTokens,
-          inputTokens: parsed.inputTokens,
-          outputTokens: parsed.outputTokens,
-          cacheTokens: parsed.cacheTokens,
-          lastTimestamp: parsed.lastTimestamp,
-          hitLimit: parsed.hitLimit,
-        });
-      } catch {
-        // skip unreadable files
-      }
+      sessions.push({
+        id: sessionId,
+        agentId: "claude-code",
+        title: parsed.firstUserMsg,
+        workspace,
+        status,
+        updatedAt: label,
+        group,
+        model: parsed.model,
+        gitBranch: parsed.gitBranch,
+        totalTokens: parsed.totalTokens,
+        inputTokens: parsed.inputTokens,
+        outputTokens: parsed.outputTokens,
+        cacheTokens: parsed.cacheTokens,
+        lastTimestamp: parsed.lastTimestamp,
+        hitLimit: parsed.hitLimit,
+      });
+    } catch {
+      // skip unreadable files
     }
   }
 
-  return sessions
-    .sort((a, b) => new Date(b.lastTimestamp).getTime() - new Date(a.lastTimestamp).getTime())
-    .slice(0, limit);
+  const sorted = sessions.sort(
+    (a, b) => new Date(b.lastTimestamp).getTime() - new Date(a.lastTimestamp).getTime(),
+  );
+  _sessionCache = { ts: now, sessions: sorted };
+  return sorted.slice(0, limit);
 }
 
 function shortToolInput(input: unknown): string {
