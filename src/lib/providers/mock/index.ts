@@ -1,5 +1,6 @@
 import type { AgentId, Note, VaultStats } from "@/lib/types";
 import type { AgentPageData, DataProvider, OverviewData } from "@/lib/providers/types";
+import { mockHermesCrewDashboard } from "@/lib/hermes/crew-core";
 import { prepareNotes } from "@/lib/obsidian/parse";
 import {
   ACTIVE_SESSIONS,
@@ -77,6 +78,7 @@ export class MockProvider implements DataProvider {
       memory: id === "hermes" ? HERMES_MEMORY : undefined,
       skills: id === "hermes" ? HERMES_SKILLS : undefined,
       jobs: id === "hermes" ? HERMES_JOBS : undefined,
+      hermesCrew: id === "hermes" ? mockHermesCrewDashboard(HERMES_TASKS, HERMES_JOBS) : undefined,
       notes: obsidianNotes,
       vaultStats,
     };
@@ -105,6 +107,10 @@ export class MockProvider implements DataProvider {
 
   async getKanban() {
     return HERMES_TASKS;
+  }
+
+  async getHermesCrew() {
+    return mockHermesCrewDashboard(HERMES_TASKS, HERMES_JOBS);
   }
 
   async createSession(agentId: AgentId, prompt: string) {

@@ -3,6 +3,7 @@ import type {
   AgentId,
   AgentSummary,
   HealthItem,
+  HermesCrewDashboard,
   Job,
   KanbanTask,
   MemoryStore,
@@ -38,6 +39,7 @@ export interface AgentPageData {
   jobs?: Job[];
   notes?: Note[];
   vaultStats?: VaultStats;
+  hermesCrew?: HermesCrewDashboard;
 }
 
 /**
@@ -58,6 +60,8 @@ export interface DataProvider {
   listHealth(): Promise<HealthItem[]>;
   /** Hermes kanban task pipeline. */
   getKanban(): Promise<KanbanTask[]>;
+  /** Hermes mission-control crew surface. */
+  getHermesCrew(): Promise<HermesCrewDashboard>;
   /** Write path: start a new session bound to an agent. Stubbed in mock mode. */
   createSession(agentId: AgentId, prompt: string): Promise<{ id: string }>;
 }

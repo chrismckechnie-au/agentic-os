@@ -1,9 +1,10 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { getProvider } from "@/lib/providers";
+import { getHermesCrewDashboard, getProvider } from "@/lib/providers";
 import { OverviewActions } from "@/components/dashboard/overview-actions";
 import { OverviewLiveUpdater } from "@/components/dashboard/overview-live-updater";
+import { HermesMissionControl } from "@/components/hermes/mission-control";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { OrchestrationPanel } from "@/components/dashboard/orchestration-panel";
@@ -15,6 +16,7 @@ import { Icon } from "@/components/icon";
 
 export default async function OverviewPage() {
   const data = await getProvider().getOverview();
+  const hermesCrew = await getHermesCrewDashboard();
   const degraded = data.health.some((item) => item.status === "degraded" || item.status === "down");
   const allDown = data.health.length > 0 && data.health.every((item) => item.status === "down");
   const healthLabel = allDown ? "Unavailable" : degraded ? "Degraded" : "Healthy";
@@ -62,6 +64,10 @@ export default async function OverviewPage() {
             <ActivityFeed items={data.activity} />
           </div>
         </div>
+      </div>
+
+      <div className="mt-4">
+        <HermesMissionControl dashboard={hermesCrew} framed />
       </div>
 
       {/* Recent Sessions + System Health + Workspaces */}

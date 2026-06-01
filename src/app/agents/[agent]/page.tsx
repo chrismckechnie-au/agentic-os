@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
-import { getProvider } from "@/lib/providers";
+import { getHermesCrewDashboard, getProvider } from "@/lib/providers";
 import { AGENT_ORDER, AGENTS, isAgentId } from "@/lib/config/agents";
 import type { AgentId, SessionDetail, VaultStats } from "@/lib/types";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -78,6 +78,7 @@ export default async function AgentPage({
     agent === "hermes"
       ? { profile: readActiveProfile() ?? undefined, home: resolveHermesHome() }
       : undefined;
+  const hermesCrew = agent === "hermes" ? await getHermesCrewDashboard() : undefined;
 
   const realData = agent !== "obsidian";
   const liveAgent = data.agent.liveCliAvailable;
@@ -108,6 +109,7 @@ export default async function AgentPage({
           notes={data.notes}
           vaultStats={vaultStats}
           hermesInfo={hermesInfo}
+          hermesCrew={hermesCrew}
         />
       </div>
     </div>

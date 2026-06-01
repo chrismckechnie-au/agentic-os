@@ -1,9 +1,10 @@
 import "server-only";
 
 import type { DataProvider } from "@/lib/providers/types";
-import type { KanbanBoard, KanbanTask } from "@/lib/types";
+import type { HermesCrewDashboard, KanbanBoard, KanbanTask } from "@/lib/types";
 import { MockProvider } from "@/lib/providers/mock";
 import { LiveProvider } from "@/lib/providers/live";
+import { readHermesCrewDashboard } from "@/lib/hermes/crew";
 import {
   dbExists,
   getDbHealth,
@@ -127,4 +128,13 @@ export async function getKanbanBoard(): Promise<KanbanBoard> {
     },
     writesEnabled: kanbanWritesEnabled(),
   };
+}
+
+export async function getHermesCrewDashboard(): Promise<HermesCrewDashboard> {
+  try {
+    return readHermesCrewDashboard();
+  } catch (err) {
+    console.error("[hermes-crew] live read failed; falling back to provider:", err);
+    return getProvider().getHermesCrew();
+  }
 }

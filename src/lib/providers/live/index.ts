@@ -15,6 +15,7 @@ import { buildOverviewStats, buildRecentSessions, buildSystemHealth, buildWorksp
 import { readSessionDetail as readClaudeDetail } from "@/lib/claude-code/reader";
 import { readSessionDetail as readCodexDetail } from "@/lib/codex/reader";
 import { hermesAvailable, readJobs, readMemory, readSkills } from "@/lib/hermes/reader";
+import { readHermesCrewDashboard } from "@/lib/hermes/crew";
 import {
   getStateDbHealth,
   readSessionDetail as readHermesDetail,
@@ -120,6 +121,7 @@ export class LiveProvider implements DataProvider {
         memory: hermesAvailable() ? readMemory() : undefined,
         skills: hermesAvailable() ? readSkills() : undefined,
         jobs: hermesAvailable() ? readJobs() : undefined,
+        hermesCrew: readHermesCrewDashboard(),
       };
     }
 
@@ -178,6 +180,10 @@ export class LiveProvider implements DataProvider {
     } catch {
       return HERMES_TASKS;
     }
+  }
+
+  async getHermesCrew() {
+    return readHermesCrewDashboard();
   }
 
   async createSession(agentId: AgentId, prompt: string): Promise<{ id: string }> {

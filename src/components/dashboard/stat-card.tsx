@@ -15,7 +15,7 @@ export function StatCard({ stat }: { stat: StatMetric }) {
         : "var(--accent)";
 
   return (
-    <Card className="p-4">
+    <Card className="flex h-full flex-col p-4">
       <div className="flex min-h-5 items-center gap-2 text-muted">
         {stat.icon && (
           <span className="flex size-4 shrink-0 items-center justify-center text-[var(--accent)]">
@@ -27,8 +27,8 @@ export function StatCard({ stat }: { stat: StatMetric }) {
 
       <div className="mt-2.5 text-3xl font-bold tracking-tight tabular-nums">{stat.value}</div>
 
-      {typeof stat.meterPct === "number" && (
-        <div className="mt-3">
+      <div className="mt-3 min-h-[34px]">
+        {typeof stat.meterPct === "number" && (
           <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
             <div
               className="h-full rounded-full transition-[width] duration-700"
@@ -39,11 +39,11 @@ export function StatCard({ stat }: { stat: StatMetric }) {
               }}
             />
           </div>
-          {stat.meterLabel && <div className="mt-1.5 text-[10.5px] text-faint">{stat.meterLabel}</div>}
-        </div>
-      )}
+        )}
+        {stat.meterLabel && <div className="mt-1.5 text-[10.5px] text-faint">{stat.meterLabel}</div>}
+      </div>
 
-      <div className="mt-1 flex items-end justify-between gap-2">
+      <div className="mt-auto flex min-h-8 items-end justify-between gap-2">
         {stat.delta ? (
           <span className={cn("flex items-center gap-1 text-xs font-medium", trendColor)}>
             {stat.trend && (

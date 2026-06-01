@@ -8,6 +8,7 @@ import { ObsidianNoteList, SessionList } from "@/components/agent/session-list";
 import { ChatInput } from "@/components/agent/chat-input";
 import { Terminal } from "@/components/agent/terminal";
 import { PtyTerminal } from "@/components/agent/pty-terminal";
+import { HermesMissionControl } from "@/components/hermes/mission-control";
 import { HermesKanban } from "@/components/kanban/hermes-kanban";
 import { HermesSessions } from "@/components/agent/hermes-sessions";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/components/agent/panels";
 import type {
   AgentId,
+  HermesCrewDashboard,
   Job,
   MemoryStore,
   Note,
@@ -60,6 +62,7 @@ function buildPanels(
     onResume?: (sessionId: string) => void;
     onOpenSession?: (sessionId: string) => void;
     hermesInfo?: { profile?: string; home?: string };
+    hermesCrew?: HermesCrewDashboard;
   },
 ): { tabs: TabDef[]; panels: Record<string, React.ReactNode>; defaultId: string } {
   const panels: Record<string, React.ReactNode> = { terminal: terminalNode };
@@ -117,8 +120,13 @@ function buildPanels(
   }
 
   if (agentId === "hermes") {
-    defaultId = "chat";
+    defaultId = extras.hermesCrew ? "crew" : "chat";
     panels.chat = terminalNode;
+    panels.crew = extras.hermesCrew ? (
+      <HermesMissionControl dashboard={extras.hermesCrew} />
+    ) : (
+      <Placeholder icon="Workflow" text="Hermes crew data is unavailable" />
+    );
     panels.kanban = <HermesKanban onOpenSession={extras.onOpenSession} />;
     panels.sessions = <HermesSessions onResume={extras.onResume} />;
     panels.memory = extras.memory && extras.memory.length > 0 ? (
@@ -220,6 +228,7 @@ export function SessionWorkspace({
   notes,
   vaultStats,
   hermesInfo,
+  hermesCrew,
 }: {
   agentId: AgentId;
   cfg: AgentConfig;
@@ -238,6 +247,7 @@ export function SessionWorkspace({
   vaultStats?: VaultStats;
   /** Hermes workspace settings (active profile, home) for the Settings tab. */
   hermesInfo?: { profile?: string; home?: string };
+  hermesCrew?: HermesCrewDashboard;
 }) {
   const [selectedId, setSelectedId] = useState(initialDetail.id);
   const [detail, setDetail] = useState<SessionDetail>(initialDetail);
@@ -357,6 +367,7 @@ export function SessionWorkspace({
     onResume: resumeInChat,
     onOpenSession: resumeInChat,
     hermesInfo,
+    hermesCrew,
   });
 
   const cardTitle = loading ? "Loading…" : live ? `Live · ${cfg.name}` : detail.title;

@@ -174,6 +174,104 @@ export interface Job {
   schedule?: string;
 }
 
+// --- Hermes crew / mission control -----------------------------------------
+export type HermesCrewRole = "orchestrator" | "engineering" | "incidents" | "social" | "research";
+
+export type HermesCrewProfileStatus = "running" | "online" | "attention" | "missing" | "idle";
+
+export interface HermesCrewChannel {
+  name: string;
+  id?: string;
+  kind: "public" | "private";
+  available: boolean;
+}
+
+export interface HermesCrewProfile {
+  id: string;
+  name: string;
+  role: HermesCrewRole;
+  description: string;
+  model: string;
+  fallbackModel: string;
+  reasoning: "medium" | "high";
+  available: boolean;
+  status: HermesCrewProfileStatus;
+  home?: string;
+  lastActivity?: string;
+  openTasks: number;
+  runningTasks: number;
+  attentionCount: number;
+  privateChannel: HermesCrewChannel;
+  publicChannels: HermesCrewChannel[];
+  toolsets: string[];
+}
+
+export interface HermesCrewJob {
+  id: string;
+  name: string;
+  owner: HermesCrewRole;
+  status: SessionStatus;
+  schedule?: string;
+  nextRunAt?: string;
+  lastRunAt?: string;
+  lastError?: string;
+  deliver?: string;
+}
+
+export interface HermesCrewActivity {
+  id: string;
+  when: string;
+  ts?: string;
+  profile?: string;
+  role?: HermesCrewRole;
+  source: "kanban" | "cron" | "gateway" | "mission-control";
+  sourceId?: string;
+  title: string;
+  status?: string;
+  summary?: string;
+  acked?: boolean;
+}
+
+export interface HermesCrewDocument {
+  id: string;
+  title: string;
+  path: string;
+  role?: HermesCrewRole;
+  profile?: string;
+  kind: "obsidian" | "mission-control";
+  updatedAt: string;
+}
+
+export interface HermesCrewDashboard {
+  hermesHome: string;
+  activeProfile?: string;
+  gateway: {
+    state: "running" | "stopped" | "unknown";
+    discord: "connected" | "disconnected" | "unknown";
+    webhook: "connected" | "disconnected" | "unknown";
+    activeAgents: number;
+  };
+  crew: HermesCrewProfile[];
+  channels: HermesCrewChannel[];
+  jobs: HermesCrewJob[];
+  activity: HermesCrewActivity[];
+  documents: HermesCrewDocument[];
+  attention: string[];
+  stats: {
+    profiles: number;
+    availableProfiles: number;
+    openTasks: number;
+    runningTasks: number;
+    failedJobs: number;
+    missingPrivateChannels: number;
+  };
+  actions: {
+    kanbanWritesEnabled: boolean;
+    crewActionsEnabled: boolean;
+    cronActionsEnabled: boolean;
+  };
+}
+
 // --- Hermes kanban (task pipeline) ---
 // Mirrors hermes_cli/kanban_db.py `tasks` table + VALID_STATUSES.
 export type TaskStatus =
