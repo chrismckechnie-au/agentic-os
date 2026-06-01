@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { getProvider } from "@/lib/providers";
 import { OverviewActions } from "@/components/dashboard/overview-actions";
+import { OverviewLiveUpdater } from "@/components/dashboard/overview-live-updater";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { OrchestrationPanel } from "@/components/dashboard/orchestration-panel";
@@ -28,6 +29,7 @@ export default async function OverviewPage() {
 
   return (
     <>
+      <OverviewLiveUpdater />
       <PageHeader
         title="Overview"
         subtitle="Monitor agents, sessions, and system health at a glance."

@@ -109,47 +109,247 @@ function Section({
 }
 
 interface UsageData {
-  available: boolean;
-  totalTokens: number;
-  outputTokens: number;
-  sessions: number;
+  pct: number;
+  resetsAt: string | null;
 }
 
-function fmt(n: number): string {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
+interface ClaudeUsageData {
+  fiveHour: UsageData | null;
+  sevenDay: UsageData | null;
+  sevenDayOpus: UsageData | null;
+  sevenDaySonnet: UsageData | null;
+  fetchedAt: string;
 }
 
-interface TokenBudgets { "claude-code": number; codex: number; }
-interface BudgetResponse { resolved: TokenBudgets; }
+interface CodexUsageData {
+  fiveHour: UsageData | null;
+  sevenDay: UsageData | null;
+  fetchedAt: string;
+  updatedAt: string | null;
+  source: "session";
+  planType: string | null;
+  rateLimitReachedType: string | null;
+}
+
+const CLAUDE_USAGE_REFRESH_MS = 180_000;
+
+function formatPlanType(planType: string | null | undefined): string | null {
+  if (!planType) return null;
+  return planType
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function countdownLabel(resetsAt: string | null, now: number): string {
+  if (!resetsAt) return "Reset unavailable";
+  const diff = new Date(resetsAt).getTime() - now;
+  if (!Number.isFinite(diff)) return "Reset unavailable";
+  if (diff <= 0) return "Resetting soon";
+
+  const totalMinutes = Math.floor(diff / 60_000);
+  if (totalMinutes < 60) return `Resets in ${totalMinutes}m`;
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours < 48) return `Resets in ${hours}h ${minutes}m`;
+
+  const days = Math.floor(hours / 24);
+  return `Resets in ${days}d ${hours % 24}h`;
+}
+
+function fetchedLabel(fetchedAt: string, now: number): string {
+  const diff = now - new Date(fetchedAt).getTime();
+  if (!Number.isFinite(diff) || diff < 0) return "Updated just now";
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "Updated just now";
+  if (mins < 60) return `Updated ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  return `Updated ${hours}h ago`;
+}
+
+function UsageMeter({
+  label,
+  usage,
+  now,
+  accent,
+}: {
+  label: string;
+  usage: UsageData;
+  now: number;
+  accent: string;
+}) {
+  const toneClass = usage.pct >= 90 ? "bg-danger" : usage.pct >= 75 ? "bg-warn" : "";
+  const clamped = Math.max(0, Math.min(100, usage.pct));
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-[11px]">
+        <span className="text-muted">{label}</span>
+        <span className="font-mono text-ink">{usage.pct.toFixed(1)}%</span>
+      </div>
+      <div className="h-[5px] overflow-hidden rounded-full bg-white/[0.07]">
+        <div
+          className={`h-full rounded-full transition-[width] duration-700 ${toneClass}`}
+          style={{
+            width: `${clamped}%`,
+            ...(toneClass ? {} : { backgroundColor: accent }),
+          }}
+        />
+      </div>
+      <p className="text-[10.5px] text-faint">{countdownLabel(usage.resetsAt, now)}</p>
+    </div>
+  );
+}
+
+function UsageCard({
+  title,
+  icon,
+  accent,
+  usage,
+  error,
+  now,
+  extraRows,
+  note,
+}: {
+  title: string;
+  icon: string;
+  accent: string;
+  usage: {
+    fiveHour: UsageData | null;
+    sevenDay: UsageData | null;
+    fetchedAt: string;
+  } | null;
+  error: string | null;
+  now: number;
+  extraRows?: Array<{ label: string; usage: UsageData | null }>;
+  note?: string | null;
+}) {
+  return (
+    <div className="rounded-[var(--radius-card)] border border-line p-3" style={{ background: "rgba(20,22,28,0.66)" }}>
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-2 text-xs font-semibold">
+          <Icon name={icon} size={14} color={accent} />
+          {title}
+        </span>
+        <span className="text-[11px] text-faint">Usage</span>
+      </div>
+      {usage ? (
+        <div className="mt-3 space-y-3">
+          {usage.fiveHour && <UsageMeter label="5h Window" usage={usage.fiveHour} now={now} accent={accent} />}
+          {usage.sevenDay && <UsageMeter label="7d Window" usage={usage.sevenDay} now={now} accent={accent} />}
+          {extraRows?.map((row) => (
+            row.usage ? <UsageMeter key={row.label} label={row.label} usage={row.usage} now={now} accent={accent} /> : null
+          ))}
+          <p className="text-[10.5px] text-faint">{fetchedLabel(usage.fetchedAt, now)}</p>
+          {note && <p className="text-[10.5px] text-faint">{note}</p>}
+        </div>
+      ) : error ? (
+        <div className="mt-3 rounded-lg border border-line bg-surface-2 px-3 py-3 text-[11px] text-faint">
+          <div className="font-medium text-muted">Unavailable</div>
+          <p className="mt-1">{error}</p>
+        </div>
+      ) : (
+        <p className="mt-3 text-[11px] text-faint">Loading usage…</p>
+      )}
+    </div>
+  );
+}
 
 export function Sidebar({ agentStatuses }: { agentStatuses?: Record<string, AgentStatus> }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [usage, setUsage] = useState<UsageData | null>(null);
-  const [budgets, setBudgets] = useState<TokenBudgets>({ "claude-code": 1_000_000, codex: 500_000 });
+  const [claudeUsage, setClaudeUsage] = useState<ClaudeUsageData | null>(null);
+  const [claudeUsageError, setClaudeUsageError] = useState<string | null>(null);
+  const [codexUsage, setCodexUsage] = useState<CodexUsageData | null>(null);
+  const [codexUsageError, setCodexUsageError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    fetch("/api/claude-code/usage")
-      .then((r) => r.json())
-      .then((d) => setUsage(d))
-      .catch(() => {});
-    fetch("/api/config/token-budget")
-      .then((r) => r.json())
-      .then((d: BudgetResponse) => { if (d.resolved) setBudgets(d.resolved); })
-      .catch(() => {});
+    let active = true;
+    const controller = new AbortController();
+
+    const readJson = async <T,>(url: string): Promise<T> => {
+      const response = await fetch(url, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(typeof data?.error === "string" ? data.error : "Usage unavailable");
+      }
+      return data as T;
+    };
+
+    const loadUsage = async () => {
+      try {
+        const [claudeResult, codexResult] = await Promise.allSettled([
+          readJson<ClaudeUsageData>("/api/claude-usage"),
+          readJson<CodexUsageData>("/api/codex/rate-limits"),
+        ]);
+        if (!active) return;
+
+        if (claudeResult.status === "fulfilled") {
+          setClaudeUsage(claudeResult.value);
+          setClaudeUsageError(null);
+        } else {
+          setClaudeUsage(null);
+          setClaudeUsageError(
+            claudeResult.reason instanceof Error ? claudeResult.reason.message : "Claude usage unavailable",
+          );
+        }
+
+        if (codexResult.status === "fulfilled") {
+          setCodexUsage(codexResult.value);
+          setCodexUsageError(null);
+        } else {
+          setCodexUsage(null);
+          setCodexUsageError(
+            codexResult.reason instanceof Error ? codexResult.reason.message : "Codex usage unavailable",
+          );
+        }
+      } catch (error: unknown) {
+        if (!active) return;
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        const message = error instanceof Error ? error.message : "Usage unavailable";
+        setClaudeUsage(null);
+        setCodexUsage(null);
+        setClaudeUsageError(message);
+        setCodexUsageError(message);
+      }
+    };
+
+    void loadUsage();
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadUsage();
+      }
+    }, CLAUDE_USAGE_REFRESH_MS);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadUsage();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
-
-  const totalTokens = usage?.totalTokens ?? 0;
-  const budget = budgets["claude-code"];
-  const usedPct = budget > 0 ? Math.min(100, Math.round((totalTokens / budget) * 100)) : 0;
-  const remainPct = 100 - usedPct;
-  const barColor = usedPct >= 95 ? "bg-danger" : usedPct >= 80 ? "bg-warn" : "bg-[var(--accent)]";
 
   return (
     <aside
@@ -185,29 +385,32 @@ export function Sidebar({ agentStatuses }: { agentStatuses?: Record<string, Agen
       {/* Footer: plan + collapse */}
       <div className="border-t border-line p-3">
         {!collapsed && (
-          <div className="mb-3 rounded-[var(--radius-card)] border border-line p-3" style={{ background: "rgba(20,22,28,0.66)" }}>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
-                Claude Code
-              </span>
-              <span className="font-mono text-[11px] text-faint">
-                {usage?.available ? `${remainPct}% left` : "—"}
-              </span>
-            </div>
-            <div className="mt-2 h-[5px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
-              <div
-                className={`h-full rounded-full transition-all duration-1000 ${barColor}`}
-                style={{ width: `${usage?.available ? usedPct : 0}%` }}
-              />
-            </div>
-            {usage?.available ? (
-              <p className="mt-2 text-[11px] text-faint">
-                {fmt(totalTokens)} / {fmt(budget)} tokens this month
-              </p>
-            ) : (
-              <p className="mt-2 text-[11px] text-faint">Loading usage…</p>
-            )}
+          <div className="mb-3 space-y-3">
+            <UsageCard
+              title="Claude Code"
+              icon="ClaudeLogo"
+              accent="#e8682c"
+              usage={claudeUsage}
+              error={claudeUsageError}
+              now={now}
+              extraRows={[
+                { label: "7d Sonnet", usage: claudeUsage?.sevenDaySonnet ?? null },
+                { label: "7d Opus", usage: claudeUsage?.sevenDayOpus ?? null },
+              ]}
+            />
+            <UsageCard
+              title="Codex"
+              icon="OpenAILogo"
+              accent="#10b981"
+              usage={codexUsage}
+              error={codexUsageError}
+              now={now}
+              note={[
+                codexUsage?.updatedAt ? `Snapshot ${fetchedLabel(codexUsage.updatedAt, now).replace("Updated ", "")}` : null,
+                formatPlanType(codexUsage?.planType),
+                codexUsage?.rateLimitReachedType ? "Rate limit reached" : null,
+              ].filter(Boolean).join(" · ") || null}
+            />
           </div>
         )}
         <button

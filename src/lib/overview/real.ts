@@ -4,10 +4,9 @@ import type { AgentSummary } from "@/lib/types";
 import { readLiveSessionSnapshot } from "@/lib/providers/live/session-snapshot";
 import { formatBytes, type SystemResources } from "@/lib/system/resources";
 
-function pctSpark(current: number, historical: number[] = []): number[] {
-  const realHistory = historical.filter((value) => Number.isFinite(value));
-  if (realHistory.some((value) => value > 0)) return [...realHistory, current];
-  return [current, current, current, current];
+function ratioPct(current: number, total: number): number {
+  if (!Number.isFinite(total) || total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((current / total) * 100)));
 }
 
 export function buildOverviewStats(
@@ -32,7 +31,8 @@ export function buildOverviewStats(
       value: `${running} / ${total}`,
       hint: running > 0 ? `${running} agent${running > 1 ? "s" : ""} active` : "All agents idle",
       icon: "Activity",
-      spark: [0, 1, 1, 2, 1, running, running],
+      meterPct: ratioPct(running, total),
+      meterLabel: `${running} of ${total} running`,
     },
   ];
 
@@ -44,7 +44,6 @@ export function buildOverviewStats(
         value: `${resources.cpuPct}%`,
         hint: `${resources.coreCount} logical core${resources.coreCount === 1 ? "" : "s"}`,
         icon: "Cpu",
-        spark: pctSpark(resources.cpuPct, resources.loadAveragePct),
         meterPct: resources.cpuPct,
         meterLabel: "Current system utilization",
       },
@@ -67,7 +66,8 @@ export function buildOverviewStats(
       value: String(activeSess),
       hint: `${sessions.length} total sessions`,
       icon: "MessageSquare",
-      spark: [Math.max(0, activeSess - 3), activeSess - 2, activeSess - 1, activeSess - 1, activeSess, activeSess, activeSess],
+      meterPct: ratioPct(activeSess, sessions.length),
+      meterLabel: `${activeSess} of ${sessions.length} active`,
     },
     {
       id: "active-workspaces",
@@ -75,7 +75,6 @@ export function buildOverviewStats(
       value: String(workspaces),
       hint: "Unique across all agents",
       icon: "FolderGit2",
-      spark: [Math.max(0, workspaces - 2), workspaces - 1, workspaces - 1, workspaces, workspaces, workspaces, workspaces],
     },
   );
 
@@ -86,6 +85,12 @@ function usageStatus(pct: number): HealthItem["status"] {
   if (pct >= 90) return "degraded";
   if (pct >= 75) return "running";
   return "healthy";
+}
+
+function usageDetail(label: "cpu" | "memory", pct: number): string {
+  if (pct >= 90) return label === "cpu" ? `${pct}% - reduce host load` : `${pct}% - free memory`;
+  if (pct >= 75) return `${pct}% - elevated`;
+  return `${pct}%`;
 }
 
 export function buildSystemHealth(agents: AgentSummary[], resources?: SystemResources): HealthItem[] {
@@ -101,12 +106,12 @@ export function buildSystemHealth(agents: AgentSummary[], resources?: SystemReso
         {
           label: "Host CPU",
           status: usageStatus(resources.cpuPct),
-          detail: `${resources.cpuPct}%`,
+          detail: usageDetail("cpu", resources.cpuPct),
         },
         {
           label: "Host RAM",
           status: usageStatus(resources.memoryPct),
-          detail: `${resources.memoryPct}%`,
+          detail: usageDetail("memory", resources.memoryPct),
         },
       ]
     : [];

@@ -58,7 +58,8 @@ export default function SettingsPage() {
           </CardHeader>
           <CardBody className="pt-0">
             <p className="mb-3 text-sm text-muted">
-              Set your monthly token budget per agent. Used to calculate % remaining in the sidebar and on agent pages.
+              Set your monthly token budget per agent. These values still back the local token-budget views, while the
+              Claude and Codex sidebar cards now use live usage windows when local Claude or Codex data is available.
             </p>
             <TokenBudgetSettings />
           </CardBody>

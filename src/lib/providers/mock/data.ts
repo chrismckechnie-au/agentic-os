@@ -21,11 +21,11 @@ import type {
 // ---------------------------------------------------------------------------
 
 export const OVERVIEW_STATS: StatMetric[] = [
-  { id: "running-agents", label: "Running Agents", value: "4 / 4", hint: "All agents online", icon: "Activity", spark: [2, 3, 3, 4, 3, 4, 4] },
-  { id: "host-cpu", label: "Host CPU", value: "42%", hint: "12 logical cores", icon: "Cpu", spark: [28, 31, 36, 40, 38, 43, 42], meterPct: 42, meterLabel: "Current system utilization" },
+  { id: "running-agents", label: "Running Agents", value: "4 / 4", hint: "All agents online", icon: "Activity", meterPct: 100, meterLabel: "4 of 4 running" },
+  { id: "host-cpu", label: "Host CPU", value: "42%", hint: "12 logical cores", icon: "Cpu", meterPct: 42, meterLabel: "Current system utilization" },
   { id: "host-memory", label: "Host RAM", value: "68%", hint: "22 GB / 32 GB", icon: "MemoryStick", meterPct: 68, meterLabel: "10 GB free" },
-  { id: "active-sessions", label: "Active Sessions", value: "12", delta: "+2 from last hour", trend: "up", icon: "MessageSquare", spark: [6, 7, 9, 8, 10, 11, 12] },
-  { id: "active-workspaces", label: "Active Workspaces", value: "8", delta: "+1 from last 24h", trend: "up", icon: "FolderGit2", spark: [5, 6, 6, 7, 7, 8, 8] },
+  { id: "active-sessions", label: "Active Sessions", value: "12", hint: "32 total sessions", icon: "MessageSquare", meterPct: 38, meterLabel: "12 of 32 active" },
+  { id: "active-workspaces", label: "Active Workspaces", value: "8", hint: "Unique across all agents", icon: "FolderGit2" },
 ];
 
 export const AGENTS_SUMMARY: AgentSummary[] = [

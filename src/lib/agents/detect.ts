@@ -86,6 +86,7 @@ export function buildAgentSummaries(
 
   const claudeLimitHit = claudeSessions[0]?.hitLimit ?? false;
   const codexLimitHit = codexSessions[0]?.hitLimit ?? false;
+  const limitMessage = "Rate limit hit — wait for quota reset or switch model/account";
 
   return [
     {
@@ -95,7 +96,7 @@ export function buildAgentSummaries(
       status: claudeLimitHit ? "degraded" : claudeActive ? "running" : claudeLatest ? "online" : "offline",
       liveCliAvailable: claudeCliAvailable,
       lastSessionAgo: claudeLatest?.updatedAt ?? "—",
-      currentTask: claudeActive?.title ?? claudeLatest?.title ?? "No active session",
+      currentTask: claudeLimitHit ? limitMessage : claudeActive?.title ?? claudeLatest?.title ?? "No active session",
       workspace: claudeActive?.workspace ?? claudeLatest?.workspace ?? "—",
       uptime: claudeActive ? "active" : undefined,
     },
@@ -106,7 +107,7 @@ export function buildAgentSummaries(
       status: codexLimitHit ? "degraded" : codexActive ? "running" : codexLatest ? "online" : "offline",
       liveCliAvailable: codexCliAvailable,
       lastSessionAgo: codexLatest?.updatedAt ?? "—",
-      currentTask: codexActive?.title ?? codexLatest?.title ?? "No active session",
+      currentTask: codexLimitHit ? limitMessage : codexActive?.title ?? codexLatest?.title ?? "No active session",
       workspace: codexActive?.workspace ?? codexLatest?.workspace ?? "—",
       uptime: codexActive ? "active" : undefined,
     },
@@ -139,9 +140,12 @@ export function buildAgentSummaries(
 export function summarizeSystemState(
   agents: AgentSummary[],
 ): { state: "healthy" | "running" | "degraded" | "down"; label: string } {
-  const down = agents.filter((agent) => agent.status === "offline").length;
-  const degraded = agents.filter((agent) => agent.status === "degraded").length;
+  const downAgents = agents.filter((agent) => agent.status === "offline");
+  const degradedAgents = agents.filter((agent) => agent.status === "degraded");
+  const down = downAgents.length;
+  const degraded = degradedAgents.length;
   const running = agents.filter((agent) => agent.status === "running").length;
+  const needsAttention = [...degradedAgents, ...downAgents];
 
   if (down === agents.length) {
     return { state: "down", label: "No agents available" };
@@ -149,7 +153,10 @@ export function summarizeSystemState(
   if (down > 0 || degraded > 0) {
     return {
       state: "degraded",
-      label: `${down + degraded} agent${down + degraded === 1 ? "" : "s"} need attention`,
+      label:
+        needsAttention.length === 1
+          ? `${needsAttention[0].name} needs attention`
+          : `${needsAttention.length} agents need attention`,
     };
   }
   if (running > 0) {

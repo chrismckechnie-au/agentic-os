@@ -6,6 +6,27 @@ import { Icon } from "@/components/icon";
 import { AGENTS } from "@/lib/config/agents";
 import type { ActivityItem } from "@/lib/types";
 
+const DISMISSED_NOTIFICATIONS_KEY = "agentic-os:dismissed-notifications";
+
+function readDismissedNotifications(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string").slice(-200) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissedNotifications(ids: string[]) {
+  try {
+    window.localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(ids.slice(-200)));
+  } catch {
+    // Best-effort persistence only.
+  }
+}
+
 function Dropdown({
   open,
   onClose,
@@ -57,10 +78,18 @@ export function TopBar({
   systemLabel?: string;
 }) {
   const [open, setOpen] = useState<"org" | "bell" | "avatar" | null>(null);
+  const [dismissedNotifications, setDismissedNotifications] = useState<string[]>(() => readDismissedNotifications());
   const toggle = (m: "org" | "bell" | "avatar") => setOpen((v) => (v === m ? null : m));
   const close = () => setOpen(null);
-  const count = notifications.length;
+  const visibleNotifications = notifications.filter((item) => !dismissedNotifications.includes(item.id));
+  const count = visibleNotifications.length;
   const systemStyle = SYSTEM_STYLES[systemState] ?? SYSTEM_STYLES.healthy;
+
+  const clearNotifications = () => {
+    const next = [...new Set([...dismissedNotifications, ...notifications.map((item) => item.id)])];
+    setDismissedNotifications(next);
+    writeDismissedNotifications(next);
+  };
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-canvas/70 px-4 backdrop-blur sm:gap-4 sm:px-6">
@@ -123,16 +152,23 @@ export function TopBar({
 
             <div className="flex items-center justify-between px-3 py-1.5">
               <span className="text-xs font-semibold text-ink">Notifications</span>
-              <Link href="/logs" onClick={close} className="text-[11px] font-medium text-[var(--accent)] hover:underline">
-                View all
-              </Link>
+              <div className="flex items-center gap-3">
+                {count > 0 && (
+                  <button onClick={clearNotifications} className="text-[11px] font-medium text-faint hover:text-ink">
+                    Clear
+                  </button>
+                )}
+                <Link href="/logs" onClick={close} className="text-[11px] font-medium text-[var(--accent)] hover:underline">
+                  View all
+                </Link>
+              </div>
             </div>
             <div className="my-1 border-t border-line" />
             {count === 0 ? (
               <p className="px-3 py-6 text-center text-xs text-faint">No recent activity.</p>
             ) : (
               <ul className="max-h-80 overflow-y-auto">
-                {notifications.slice(0, 8).map((n) => {
+                {visibleNotifications.slice(0, 8).map((n) => {
                   const accent = n.agentId ? AGENTS[n.agentId].accent : "var(--accent)";
                   const icon = n.agentId ? AGENTS[n.agentId].icon : n.icon;
                   return (
