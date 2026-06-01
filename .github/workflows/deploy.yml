@@ -56,6 +56,21 @@ jobs:
           systemctl --user restart agentic-os
           systemctl --user is-active agentic-os
 
+      - name: Configure Tailscale Serve
+        run: |
+          set -e
+          if ! command -v tailscale >/dev/null 2>&1; then
+            echo "tailscale CLI not found; skipping Tailscale Serve."
+            exit 0
+          fi
+          tailscale_ip="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
+          if [ -z "$tailscale_ip" ]; then
+            echo "No Tailscale IPv4 address found; skipping Tailscale Serve."
+            exit 0
+          fi
+          tailscale serve --yes --bg "http://${tailscale_ip}:3017"
+          tailscale serve status
+
       - name: Verify readiness
         run: |
           set -e
