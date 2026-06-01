@@ -19,6 +19,7 @@ import {
   getStateDbHealth,
   readSessionDetail as readHermesDetail,
 } from "@/lib/hermes/state";
+import { filterOverviewSessions } from "@/lib/overview/session-filters";
 import { readVaultStats } from "@/lib/obsidian/reader";
 import { listRepos, getRepo } from "@/lib/providers/live/github";
 import { listNotes, noteToDetail, noteToSession } from "@/lib/providers/live/obsidian";
@@ -43,15 +44,21 @@ function emptySessionDetail(agentId: AgentId, title: string, workspace?: string)
 export class LiveProvider implements DataProvider {
   async getOverview(): Promise<OverviewData> {
     const snapshot = readLiveSessionSnapshot();
+    const overviewSessions = filterOverviewSessions(snapshot.all);
+    const overviewSnapshot = {
+      ...snapshot,
+      hermes: filterOverviewSessions(snapshot.hermes),
+      all: overviewSessions,
+    };
     const agents = buildAgentSummaries(snapshot);
     const resources = await readSystemResources();
     return {
-      stats: buildOverviewStats(agents, snapshot.all, resources),
+      stats: buildOverviewStats(agents, overviewSessions, resources),
       agents,
-      recentSessions: buildRecentSessions(snapshot.all),
+      recentSessions: buildRecentSessions(overviewSessions),
       health: buildSystemHealth(agents, resources),
-      activity: buildActivity(6, snapshot),
-      workspaces: buildWorkspaces(snapshot.all),
+      activity: buildActivity(6, overviewSnapshot),
+      workspaces: buildWorkspaces(overviewSessions),
     };
   }
 
