@@ -134,6 +134,7 @@ export function TopBar({
               <ul className="max-h-80 overflow-y-auto">
                 {notifications.slice(0, 8).map((n) => {
                   const accent = n.agentId ? AGENTS[n.agentId].accent : "var(--accent)";
+                  const icon = n.agentId ? AGENTS[n.agentId].icon : n.icon;
                   return (
                     <li key={n.id}>
                       <Link
@@ -145,7 +146,7 @@ export function TopBar({
                           className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border border-line"
                           style={{ color: accent, background: `color-mix(in srgb, ${accent} 12%, transparent)` }}
                         >
-                          <Icon name={n.icon} size={12} />
+                          <Icon name={icon} size={12} />
                         </span>
                         <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted">{n.text}</span>
                         <span className="shrink-0 text-[10px] text-faint">{n.when}</span>

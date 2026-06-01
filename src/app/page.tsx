@@ -36,7 +36,7 @@ export default async function OverviewPage() {
       />
 
       {/* 5-col stat grid */}
-      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3.5 min-[960px]:grid-cols-5">
         {data.stats.map((s) => (
           <StatCard key={s.id} stat={s} />
         ))}

@@ -154,7 +154,7 @@ export function Sidebar({ agentStatuses }: { agentStatuses?: Record<string, Agen
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line bg-surface/60 backdrop-blur transition-all lg:flex",
+        "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line bg-surface/60 backdrop-blur transition-all min-[960px]:flex",
         collapsed ? "w-[68px]" : "w-60",
       )}
     >

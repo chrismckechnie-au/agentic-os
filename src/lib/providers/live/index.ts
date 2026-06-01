@@ -19,7 +19,7 @@ import {
   getStateDbHealth,
   readSessionDetail as readHermesDetail,
 } from "@/lib/hermes/state";
-import { filterOverviewSessions } from "@/lib/overview/session-filters";
+import { filterNonCronSessions } from "@/lib/overview/session-filters";
 import { readVaultStats } from "@/lib/obsidian/reader";
 import { listRepos, getRepo } from "@/lib/providers/live/github";
 import { listNotes, noteToDetail, noteToSession } from "@/lib/providers/live/obsidian";
@@ -44,10 +44,10 @@ function emptySessionDetail(agentId: AgentId, title: string, workspace?: string)
 export class LiveProvider implements DataProvider {
   async getOverview(): Promise<OverviewData> {
     const snapshot = readLiveSessionSnapshot();
-    const overviewSessions = filterOverviewSessions(snapshot.all);
+    const overviewSessions = filterNonCronSessions(snapshot.all);
     const overviewSnapshot = {
       ...snapshot,
-      hermes: filterOverviewSessions(snapshot.hermes),
+      hermes: filterNonCronSessions(snapshot.hermes),
       all: overviewSessions,
     };
     const agents = buildAgentSummaries(snapshot);
@@ -160,7 +160,12 @@ export class LiveProvider implements DataProvider {
   }
 
   async listActivity(): Promise<ActivityItem[]> {
-    return buildActivity(8, readLiveSessionSnapshot());
+    const snapshot = readLiveSessionSnapshot();
+    return buildActivity(8, {
+      ...snapshot,
+      hermes: filterNonCronSessions(snapshot.hermes),
+      all: filterNonCronSessions(snapshot.all),
+    });
   }
 
   async listHealth(): Promise<HealthItem[]> {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Session } from "../types";
-import { filterOverviewSessions, isHermesCronSession } from "./session-filters.ts";
+import { filterNonCronSessions, isHermesCronSession } from "./session-filters.ts";
 
 test("identifies Hermes cron sessions by workspace source", () => {
   const session: Session = {
@@ -16,7 +16,20 @@ test("identifies Hermes cron sessions by workspace source", () => {
   assert.equal(isHermesCronSession(session), true);
 });
 
-test("keeps non-cron sessions in overview data", () => {
+test("identifies Hermes cron sessions by generated conversation ids", () => {
+  const session: Session = {
+    id: "cron_6a6446c872cd_20260601_190919",
+    agentId: "hermes",
+    title: "Conversation cron_6a6446c",
+    workspace: "hermes-agent",
+    status: "completed",
+    updatedAt: "just now",
+  };
+
+  assert.equal(isHermesCronSession(session), true);
+});
+
+test("keeps non-cron sessions in homepage data", () => {
   const sessions: Session[] = [
     {
       id: "hm-1",
@@ -45,7 +58,7 @@ test("keeps non-cron sessions in overview data", () => {
   ];
 
   assert.deepEqual(
-    filterOverviewSessions(sessions).map((session) => session.id),
+    filterNonCronSessions(sessions).map((session) => session.id),
     ["hm-2", "cx-1"],
   );
 });

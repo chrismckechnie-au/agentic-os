@@ -32,32 +32,15 @@ function StatusPill({ status, pulse }: { status: string; pulse?: boolean }) {
   );
 }
 
-function MeterBar({ pct, color }: { pct: number; color: string }) {
-  return (
-    <div className="h-[5px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
-      <div
-        className="h-full rounded-full transition-[width] duration-1000"
-        style={{
-          width: `${pct}%`,
-          background: color,
-          boxShadow: `0 0 8px color-mix(in srgb, ${color} 55%, transparent)`,
-        }}
-      />
-    </div>
-  );
-}
-
 function AgentRow({ agent }: { agent: AgentSummary }) {
   const cfg = AGENTS[agent.id];
   const live = agent.status === "running";
-  const cpu = agent.cpu;
-  const mem = agent.mem;
 
   return (
     <Link
       href={`/agents/${agent.id}`}
       className="grid items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-white/[0.025]"
-      style={{ gridTemplateColumns: "auto minmax(0,1fr) 128px" }}
+      style={{ gridTemplateColumns: "auto minmax(0,1fr)" }}
     >
       {/* Agent glyph */}
       <span
@@ -94,36 +77,6 @@ function AgentRow({ agent }: { agent: AgentSummary }) {
               <Icon name="Clock" size={11} /> up {agent.uptime}
             </span>
           )}
-        </div>
-      </div>
-
-      {/* CPU / MEM meters */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2">
-          <span className="w-6 text-[9px] font-semibold uppercase tracking-wider text-faint">CPU</span>
-          <div className="flex-1">
-            {typeof cpu === "number" ? (
-              <MeterBar pct={cpu} color={cfg.accent} />
-            ) : (
-              <div className="h-[5px] rounded-full bg-white/[0.07]" />
-            )}
-          </div>
-          <span className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted">
-            {typeof cpu === "number" ? `${Math.round(cpu)}%` : "—"}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-6 text-[9px] font-semibold uppercase tracking-wider text-faint">MEM</span>
-          <div className="flex-1">
-            {typeof mem === "number" ? (
-              <MeterBar pct={mem} color="#9aa1ad" />
-            ) : (
-              <div className="h-[5px] rounded-full bg-white/[0.07]" />
-            )}
-          </div>
-          <span className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted">
-            {typeof mem === "number" ? `${Math.round(mem)}%` : "—"}
-          </span>
         </div>
       </div>
     </Link>
