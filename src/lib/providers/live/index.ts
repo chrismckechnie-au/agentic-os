@@ -25,6 +25,7 @@ import { listNotes, noteToDetail, noteToSession } from "@/lib/providers/live/obs
 import { readTasks } from "@/lib/providers/live/hermes-kanban";
 import { HERMES_TASKS } from "@/lib/providers/mock/data";
 import { readLiveSessionSnapshot, toBaseSession } from "@/lib/providers/live/session-snapshot";
+import { readSystemResources } from "@/lib/system/resources";
 
 function emptySessionDetail(agentId: AgentId, title: string, workspace?: string): SessionDetail {
   return {
@@ -43,11 +44,12 @@ export class LiveProvider implements DataProvider {
   async getOverview(): Promise<OverviewData> {
     const snapshot = readLiveSessionSnapshot();
     const agents = buildAgentSummaries(snapshot);
+    const resources = await readSystemResources();
     return {
-      stats: buildOverviewStats(agents, snapshot.all),
+      stats: buildOverviewStats(agents, snapshot.all, resources),
       agents,
       recentSessions: buildRecentSessions(snapshot.all),
-      health: buildSystemHealth(agents),
+      health: buildSystemHealth(agents, resources),
       activity: buildActivity(6, snapshot),
       workspaces: buildWorkspaces(snapshot.all),
     };
@@ -155,7 +157,7 @@ export class LiveProvider implements DataProvider {
   }
 
   async listHealth(): Promise<HealthItem[]> {
-    return buildSystemHealth(buildAgentSummaries());
+    return buildSystemHealth(buildAgentSummaries(), await readSystemResources());
   }
 
   async getKanban() {

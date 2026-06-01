@@ -22,9 +22,9 @@ import type {
 
 export const OVERVIEW_STATS: StatMetric[] = [
   { id: "running-agents", label: "Running Agents", value: "4 / 4", hint: "All agents online", icon: "Activity", spark: [2, 3, 3, 4, 3, 4, 4] },
+  { id: "host-cpu", label: "Host CPU", value: "42%", hint: "12 logical cores", icon: "Cpu", spark: [28, 31, 36, 40, 38, 43, 42], meterPct: 42, meterLabel: "Current system utilization" },
+  { id: "host-memory", label: "Host RAM", value: "68%", hint: "22 GB / 32 GB", icon: "MemoryStick", meterPct: 68, meterLabel: "10 GB free" },
   { id: "active-sessions", label: "Active Sessions", value: "12", delta: "+2 from last hour", trend: "up", icon: "MessageSquare", spark: [6, 7, 9, 8, 10, 11, 12] },
-  { id: "tasks-completed", label: "Tasks Completed", value: "248", delta: "+18 from last 24h", trend: "up", icon: "CircleCheck", spark: [180, 195, 205, 220, 230, 240, 248] },
-  { id: "success-rate", label: "Success Rate", value: "96.3%", delta: "+1.2% from last 24h", trend: "up", icon: "Target", spark: [93, 94, 94, 95, 95, 96, 96.3] },
   { id: "active-workspaces", label: "Active Workspaces", value: "8", delta: "+1 from last 24h", trend: "up", icon: "FolderGit2", spark: [5, 6, 6, 7, 7, 8, 8] },
 ];
 
@@ -99,6 +99,8 @@ export const WORKSPACES: WorkspaceSummary[] = [
 ];
 
 export const HEALTH: HealthItem[] = [
+  { label: "Host CPU", status: "healthy", detail: "42%" },
+  { label: "Host RAM", status: "healthy", detail: "68%" },
   { label: "API", status: "healthy", detail: "120ms" },
   { label: "Database", status: "healthy", detail: "8ms" },
   { label: "Agents", status: "healthy", detail: "4/4" },

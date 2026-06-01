@@ -7,6 +7,12 @@ import type { StatMetric } from "@/lib/types";
 export function StatCard({ stat }: { stat: StatMetric }) {
   const trendColor =
     stat.trend === "down" ? "text-danger" : stat.trend === "up" ? "text-ok" : "text-muted";
+  const meterColor =
+    typeof stat.meterPct === "number" && stat.meterPct >= 90
+      ? "#f87171"
+      : typeof stat.meterPct === "number" && stat.meterPct >= 75
+        ? "#f59e0b"
+        : "var(--accent)";
 
   return (
     <Card className="p-4">
@@ -20,6 +26,22 @@ export function StatCard({ stat }: { stat: StatMetric }) {
       </div>
 
       <div className="mt-2.5 text-3xl font-bold tracking-tight tabular-nums">{stat.value}</div>
+
+      {typeof stat.meterPct === "number" && (
+        <div className="mt-3">
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+            <div
+              className="h-full rounded-full transition-[width] duration-700"
+              style={{
+                width: `${Math.max(0, Math.min(100, stat.meterPct))}%`,
+                background: meterColor,
+                boxShadow: `0 0 10px color-mix(in srgb, ${meterColor} 58%, transparent)`,
+              }}
+            />
+          </div>
+          {stat.meterLabel && <div className="mt-1.5 text-[10.5px] text-faint">{stat.meterLabel}</div>}
+        </div>
+      )}
 
       <div className="mt-1 flex items-end justify-between gap-2">
         {stat.delta ? (

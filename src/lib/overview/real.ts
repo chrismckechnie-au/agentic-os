@@ -2,10 +2,18 @@
 import type { Session, StatMetric, HealthItem, WorkspaceSummary } from "@/lib/types";
 import type { AgentSummary } from "@/lib/types";
 import { readLiveSessionSnapshot } from "@/lib/providers/live/session-snapshot";
+import { formatBytes, type SystemResources } from "@/lib/system/resources";
+
+function pctSpark(current: number, historical: number[] = []): number[] {
+  const realHistory = historical.filter((value) => Number.isFinite(value));
+  if (realHistory.some((value) => value > 0)) return [...realHistory, current];
+  return [current, current, current, current];
+}
 
 export function buildOverviewStats(
   agents: AgentSummary[],
   sessions: Session[] = readLiveSessionSnapshot().all,
+  resources?: SystemResources,
 ): StatMetric[] {
 
   const running   = agents.filter((a) => a.status === "running").length;
@@ -13,14 +21,11 @@ export function buildOverviewStats(
   const activeSess = sessions.filter(
     (s) => s.status === "active" || s.status === "in_progress",
   ).length;
-  const completed = sessions.filter(
-    (s) => s.status === "completed",
-  ).length;
   const workspaces = new Set(
     sessions.map((s) => s.workspace).filter(Boolean),
   ).size;
 
-  return [
+  const stats: StatMetric[] = [
     {
       id: "running-agents",
       label: "Running Agents",
@@ -29,6 +34,33 @@ export function buildOverviewStats(
       icon: "Activity",
       spark: [0, 1, 1, 2, 1, running, running],
     },
+  ];
+
+  if (resources) {
+    stats.push(
+      {
+        id: "host-cpu",
+        label: "Host CPU",
+        value: `${resources.cpuPct}%`,
+        hint: `${resources.coreCount} logical core${resources.coreCount === 1 ? "" : "s"}`,
+        icon: "Cpu",
+        spark: pctSpark(resources.cpuPct, resources.loadAveragePct),
+        meterPct: resources.cpuPct,
+        meterLabel: "Current system utilization",
+      },
+      {
+        id: "host-memory",
+        label: "Host RAM",
+        value: `${resources.memoryPct}%`,
+        hint: `${formatBytes(resources.usedMemoryBytes)} / ${formatBytes(resources.totalMemoryBytes)}`,
+        icon: "MemoryStick",
+        meterPct: resources.memoryPct,
+        meterLabel: `${formatBytes(resources.freeMemoryBytes)} free`,
+      },
+    );
+  }
+
+  stats.push(
     {
       id: "active-sessions",
       label: "Active Sessions",
@@ -38,14 +70,6 @@ export function buildOverviewStats(
       spark: [Math.max(0, activeSess - 3), activeSess - 2, activeSess - 1, activeSess - 1, activeSess, activeSess, activeSess],
     },
     {
-      id: "tasks-completed",
-      label: "Tasks Completed",
-      value: String(completed),
-      hint: `${sessions.filter((s) => s.group === "Today").length} today`,
-      icon: "CircleCheck",
-      spark: [Math.max(0, completed - 20), completed - 15, completed - 10, completed - 6, completed - 3, completed - 1, completed],
-    },
-    {
       id: "active-workspaces",
       label: "Active Workspaces",
       value: String(workspaces),
@@ -53,21 +77,45 @@ export function buildOverviewStats(
       icon: "FolderGit2",
       spark: [Math.max(0, workspaces - 2), workspaces - 1, workspaces - 1, workspaces, workspaces, workspaces, workspaces],
     },
-  ];
+  );
+
+  return stats;
 }
 
-export function buildSystemHealth(agents: AgentSummary[]): HealthItem[] {
+function usageStatus(pct: number): HealthItem["status"] {
+  if (pct >= 90) return "degraded";
+  if (pct >= 75) return "running";
+  return "healthy";
+}
+
+export function buildSystemHealth(agents: AgentSummary[], resources?: SystemResources): HealthItem[] {
   const toHealth = (s: AgentSummary["status"]): HealthItem["status"] => {
     if (s === "running") return "running";
     if (s === "online") return "healthy";
     if (s === "degraded") return "degraded";
     return "down";
   };
-  return agents.map((a) => ({
+
+  const resourceItems: HealthItem[] = resources
+    ? [
+        {
+          label: "Host CPU",
+          status: usageStatus(resources.cpuPct),
+          detail: `${resources.cpuPct}%`,
+        },
+        {
+          label: "Host RAM",
+          status: usageStatus(resources.memoryPct),
+          detail: `${resources.memoryPct}%`,
+        },
+      ]
+    : [];
+
+  return [...resourceItems, ...agents.map((a) => ({
     label: a.name,
     status: toHealth(a.status),
     detail: a.currentTask ?? a.status,
-  }));
+  }))];
 }
 
 export function buildWorkspaces(

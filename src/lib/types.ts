@@ -26,6 +26,9 @@ export interface StatMetric {
   trend?: "up" | "down" | "flat";
   /** Sparkline series for the card. */
   spark?: number[];
+  /** Current utilization meter for resource cards. */
+  meterPct?: number;
+  meterLabel?: string;
   /** Lucide icon key (see components/icon.tsx). */
   icon?: string;
 }
