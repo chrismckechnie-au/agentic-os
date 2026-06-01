@@ -56,36 +56,6 @@ jobs:
           systemctl --user restart agentic-os
           systemctl --user is-active agentic-os
 
-      - name: Configure Tailscale Serve
-        run: |
-          set -e
-          if ! command -v tailscale >/dev/null 2>&1; then
-            echo "tailscale CLI not found; skipping Tailscale Serve."
-            exit 0
-          fi
-          tailscale_ip="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
-          if [ -z "$tailscale_ip" ]; then
-            echo "No Tailscale IPv4 address found; skipping Tailscale Serve."
-            exit 0
-          fi
-          serve_target="http://${tailscale_ip}:3017"
-          if tailscale serve --yes --bg "$serve_target"; then
-            tailscale serve status
-            exit 0
-          fi
-          if command -v sudo >/dev/null 2>&1; then
-            # Tailscale may require root unless this user has been set as the operator.
-            sudo -n tailscale set --operator="$USER" || true
-            tailscale serve --yes --bg "$serve_target" && tailscale serve status && exit 0
-            if sudo -n tailscale serve --yes --bg "$serve_target"; then
-              sudo -n tailscale serve status
-              exit 0
-            fi
-          fi
-          echo "Tailscale Serve was not configured for ${serve_target}."
-          echo "Run once on the host: sudo tailscale set --operator=\$USER && tailscale serve --yes --bg ${serve_target}"
-          exit 0
-
       - name: Verify readiness
         run: |
           set -e
