@@ -68,8 +68,21 @@ jobs:
             echo "No Tailscale IPv4 address found; skipping Tailscale Serve."
             exit 0
           fi
-          tailscale serve --yes --bg "http://${tailscale_ip}:3017"
-          tailscale serve status
+          serve_target="http://${tailscale_ip}:3017"
+          if tailscale serve --yes --bg "$serve_target"; then
+            tailscale serve status
+            exit 0
+          fi
+          if command -v sudo >/dev/null 2>&1; then
+            # Tailscale may require root unless this user has been set as the operator.
+            sudo -n tailscale set --operator="$USER" || true
+            tailscale serve --yes --bg "$serve_target" && tailscale serve status && exit 0
+            sudo -n tailscale serve --yes --bg "$serve_target"
+            sudo -n tailscale serve status
+            exit 0
+          fi
+          echo "Failed to configure Tailscale Serve for ${serve_target}."
+          exit 1
 
       - name: Verify readiness
         run: |
