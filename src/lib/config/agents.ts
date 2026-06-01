@@ -14,7 +14,7 @@ export interface AgentConfig {
   tagline: string;
   /** Primary accent (hex). Drives the per-page --accent CSS variable. */
   accent: string;
-  /** Lucide icon key (see components/icon.tsx). */
+  /** Icon key (Lucide or local brand SVG, see components/icon.tsx). */
   icon: string;
   tabs: AgentTab[];
   /**
@@ -32,7 +32,7 @@ export const AGENTS: Record<AgentId, AgentConfig> = {
     name: "Claude Code",
     tagline: "AI assistant for coding, debugging and refactoring.",
     accent: "#e8682c",
-    icon: "Sparkles",
+    icon: "ClaudeLogo",
     liveCli: { bin: "claude" },
     tabs: [
       { id: "terminal", label: "Terminal" },
@@ -46,7 +46,7 @@ export const AGENTS: Record<AgentId, AgentConfig> = {
     name: "Codex",
     tagline: "OpenAI coding agent for autonomous development.",
     accent: "#10b981",
-    icon: "CodeXml",
+    icon: "OpenAILogo",
     liveCli: { bin: "codex" },
     tabs: [
       { id: "terminal", label: "Terminal" },
@@ -61,10 +61,12 @@ export const AGENTS: Record<AgentId, AgentConfig> = {
     name: "Hermes",
     tagline: "Autonomous AI agent for research and automation.",
     accent: "#a855f7",
-    icon: "Send",
+    icon: "HermesLogo",
     liveCli: { bin: "hermes" },
     tabs: [
-      { id: "terminal", label: "Terminal" },
+      { id: "chat", label: "Chat" },
+      { id: "kanban", label: "Kanban" },
+      { id: "sessions", label: "Sessions" },
       { id: "memory", label: "Memory" },
       { id: "skills", label: "Skills" },
       { id: "jobs", label: "Jobs" },
@@ -76,11 +78,11 @@ export const AGENTS: Record<AgentId, AgentConfig> = {
     name: "Obsidian",
     tagline: "Knowledge management and note-taking.",
     accent: "#9d7cff",
-    icon: "Hexagon",
+    icon: "ObsidianLogo",
     tabs: [
-      { id: "terminal", label: "Terminal" },
       { id: "notes", label: "Notes" },
       { id: "graph", label: "Graph" },
+      { id: "backlinks", label: "Backlinks" },
       { id: "settings", label: "Settings" },
     ],
   },

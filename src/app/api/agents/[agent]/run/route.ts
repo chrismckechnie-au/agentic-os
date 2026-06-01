@@ -1,34 +1,15 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
-import os from "os";
-import path from "path";
-import fs from "fs";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const isWin = process.platform === "win32";
+const RUN_ROUTE_ENABLED = /^(1|true)$/i.test(process.env.AGENTIC_ENABLE_RUN_ROUTE ?? "");
 
 // Only these agents map to a real local CLI.
 const BINARIES: Record<string, string> = {
   "claude-code": "claude",
   codex: "codex",
 };
-
-// cwd allowlist roots — client-supplied cwd must resolve under one of these.
-const ALLOWED_ROOTS = [process.cwd(), os.homedir(), "F:\\Development", "/home", "/Users"];
-
-function resolveCwd(requested?: string): string {
-  const fallback = process.cwd();
-  if (!requested) return fallback;
-  try {
-    const resolved = path.resolve(requested);
-    const ok = ALLOWED_ROOTS.some((root) => resolved.toLowerCase().startsWith(path.resolve(root).toLowerCase()));
-    if (ok && fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) return resolved;
-  } catch {
-    // fall through
-  }
-  return fallback;
-}
 
 function buildArgs(agent: string, resumeId?: string): string[] {
   if (agent === "claude-code") {
@@ -86,6 +67,10 @@ function extractCodex(line: string): { text?: string; step?: string; done?: bool
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ agent: string }> }) {
+  if (!RUN_ROUTE_ENABLED) {
+    return Response.json({ error: "Run route disabled" }, { status: 404 });
+  }
+
   const { agent } = await params;
   const bin = BINARIES[agent];
   if (!bin) {
@@ -97,6 +82,43 @@ export async function POST(req: Request, { params }: { params: Promise<{ agent: 
   if (!prompt) {
     return Response.json({ error: "Missing prompt" }, { status: 400 });
   }
+
+  const [{ spawn }, path, fs] = await Promise.all([
+    import("node:child_process"),
+    import("node:path"),
+    import("node:fs"),
+  ]);
+  const isWin = process.platform === "win32";
+  const allowedRoots = [
+    process.cwd(),
+    ...(process.env.AGENTIC_ALLOWED_ROOTS?.split(path.delimiter).filter(Boolean) ?? []),
+  ]
+    .map((root) => {
+      try {
+        return fs.realpathSync(path.resolve(root));
+      } catch {
+        return null;
+      }
+    })
+    .filter((root): root is string => Boolean(root));
+
+  const withinRoot = (target: string, root: string): boolean => {
+    const relative = path.relative(root, target);
+    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  };
+
+  const resolveCwd = (requested?: string): string => {
+    const fallback = process.cwd();
+    if (!requested) return fallback;
+    try {
+      const resolved = fs.realpathSync(path.resolve(requested));
+      const ok = allowedRoots.some((root) => withinRoot(resolved, root));
+      if (ok && fs.statSync(resolved).isDirectory()) return resolved;
+    } catch {
+      // fall through
+    }
+    return fallback;
+  };
 
   const cwd = resolveCwd(body.cwd);
   const args = buildArgs(agent, body.resumeId);

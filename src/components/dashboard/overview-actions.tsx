@@ -3,16 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
+import { AGENTS } from "@/lib/config/agents";
+import type { AgentSummary } from "@/lib/types";
 
-const LIVE_AGENTS = [
-  { id: "claude-code", label: "Claude Code", icon: "Sparkles" },
-  { id: "codex", label: "Codex", icon: "CodeXml" },
-] as const;
-
-export function OverviewActions() {
+export function OverviewActions({ agents }: { agents: AgentSummary[] }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const liveAgents = agents.filter((agent) => agent.liveCliAvailable);
 
   const refresh = () => {
     setRefreshing(true);
@@ -33,7 +31,8 @@ export function OverviewActions() {
 
       <div className="relative">
         <button
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={() => liveAgents.length > 0 && setMenuOpen((v) => !v)}
+          disabled={liveAgents.length === 0}
           className="flex h-[34px] items-center gap-2 rounded-[10px] px-3 text-sm font-medium text-white transition-colors"
           style={{ background: "var(--accent)", boxShadow: "0 6px 20px -8px color-mix(in srgb, var(--accent) 70%, transparent)" }}
         >
@@ -47,17 +46,17 @@ export function OverviewActions() {
               <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-faint">
                 Start live session
               </p>
-              {LIVE_AGENTS.map((a) => (
+              {liveAgents.map((agent) => (
                 <button
-                  key={a.id}
+                  key={agent.id}
                   onClick={() => {
                     setMenuOpen(false);
-                    router.push(`/agents/${a.id}?new=1`);
+                    router.push(`/agents/${agent.id}?new=1`);
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-3"
                 >
-                  <Icon name={a.icon} size={14} className="text-muted" />
-                  {a.label}
+                  <Icon name={AGENTS[agent.id].icon} size={14} className="text-muted" />
+                  {agent.name}
                 </button>
               ))}
             </div>

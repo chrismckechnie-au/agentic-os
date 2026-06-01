@@ -17,8 +17,8 @@ export async function getAgentPage(): Promise<AgentPageData> {
   throw new Error("hermes.getAgentPage not implemented (see TODO).");
 }
 
-// Kanban task pipeline — implemented. Reads ~/.hermes/kanban.db (or
-// $HERMES_KANBAN_DB) directly via node:sqlite. See ./hermes-kanban.ts.
+// Kanban task pipeline — implemented. Reads the active Hermes board DB directly
+// via node:sqlite. See ./hermes-kanban.ts.
 export async function listTasks(): Promise<KanbanTask[]> {
   return readTasks();
 }

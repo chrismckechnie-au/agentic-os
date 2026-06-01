@@ -1,49 +1,73 @@
 // Server-only. Derives real Overview stats and recent sessions from local readers.
 import type { Session, StatMetric, HealthItem, WorkspaceSummary } from "@/lib/types";
 import type { AgentSummary } from "@/lib/types";
-import { readSessions as readClaudeSessions } from "@/lib/claude-code/reader";
-import { readSessions as readCodexSessions } from "@/lib/codex/reader";
+import { readLiveSessionSnapshot } from "@/lib/providers/live/session-snapshot";
+import { formatBytes, type SystemResources } from "@/lib/system/resources";
 
-export function buildOverviewStats(agents: AgentSummary[]): StatMetric[] {
-  const claudeSessions = (() => { try { return readClaudeSessions(200); } catch { return []; } })();
-  const codexSessions  = (() => { try { return readCodexSessions(200); } catch { return []; } })();
+function ratioPct(current: number, total: number): number {
+  if (!Number.isFinite(total) || total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((current / total) * 100)));
+}
+
+export function buildOverviewStats(
+  agents: AgentSummary[],
+  sessions: Session[] = readLiveSessionSnapshot().all,
+  resources?: SystemResources,
+): StatMetric[] {
 
   const running   = agents.filter((a) => a.status === "running").length;
   const total     = agents.length;
-  const activeSess = [...claudeSessions, ...codexSessions].filter(
+  const activeSess = sessions.filter(
     (s) => s.status === "active" || s.status === "in_progress",
   ).length;
-  const completed = [...claudeSessions, ...codexSessions].filter(
-    (s) => s.status === "completed",
-  ).length;
   const workspaces = new Set(
-    [...claudeSessions, ...codexSessions].map((s) => s.workspace).filter(Boolean),
+    sessions.map((s) => s.workspace).filter(Boolean),
   ).size;
 
-  return [
+  const stats: StatMetric[] = [
     {
       id: "running-agents",
       label: "Running Agents",
       value: `${running} / ${total}`,
       hint: running > 0 ? `${running} agent${running > 1 ? "s" : ""} active` : "All agents idle",
       icon: "Activity",
-      spark: [0, 1, 1, 2, 1, running, running],
+      meterPct: ratioPct(running, total),
+      meterLabel: `${running} of ${total} running`,
     },
+  ];
+
+  if (resources) {
+    stats.push(
+      {
+        id: "host-cpu",
+        label: "Host CPU",
+        value: `${resources.cpuPct}%`,
+        hint: `${resources.coreCount} logical core${resources.coreCount === 1 ? "" : "s"}`,
+        icon: "Cpu",
+        meterPct: resources.cpuPct,
+        meterLabel: "Current system utilization",
+      },
+      {
+        id: "host-memory",
+        label: "Host RAM",
+        value: `${resources.memoryPct}%`,
+        hint: `${formatBytes(resources.usedMemoryBytes)} / ${formatBytes(resources.totalMemoryBytes)}`,
+        icon: "MemoryStick",
+        meterPct: resources.memoryPct,
+        meterLabel: `${formatBytes(resources.freeMemoryBytes)} free`,
+      },
+    );
+  }
+
+  stats.push(
     {
       id: "active-sessions",
       label: "Active Sessions",
       value: String(activeSess),
-      hint: `${claudeSessions.length + codexSessions.length} total sessions`,
+      hint: `${sessions.length} total sessions`,
       icon: "MessageSquare",
-      spark: [Math.max(0, activeSess - 3), activeSess - 2, activeSess - 1, activeSess - 1, activeSess, activeSess, activeSess],
-    },
-    {
-      id: "tasks-completed",
-      label: "Tasks Completed",
-      value: String(completed),
-      hint: `${claudeSessions.filter((s) => s.group === "Today").length + codexSessions.filter((s) => s.group === "Today").length} today`,
-      icon: "CircleCheck",
-      spark: [Math.max(0, completed - 20), completed - 15, completed - 10, completed - 6, completed - 3, completed - 1, completed],
+      meterPct: ratioPct(activeSess, sessions.length),
+      meterLabel: `${activeSess} of ${sessions.length} active`,
     },
     {
       id: "active-workspaces",
@@ -51,39 +75,62 @@ export function buildOverviewStats(agents: AgentSummary[]): StatMetric[] {
       value: String(workspaces),
       hint: "Unique across all agents",
       icon: "FolderGit2",
-      spark: [Math.max(0, workspaces - 2), workspaces - 1, workspaces - 1, workspaces, workspaces, workspaces, workspaces],
     },
-  ];
+  );
+
+  return stats;
 }
 
-export function buildSystemHealth(agents: AgentSummary[]): HealthItem[] {
+function usageStatus(pct: number): HealthItem["status"] {
+  if (pct >= 90) return "degraded";
+  if (pct >= 75) return "running";
+  return "healthy";
+}
+
+function usageDetail(label: "cpu" | "memory", pct: number): string {
+  if (pct >= 90) return label === "cpu" ? `${pct}% - reduce host load` : `${pct}% - free memory`;
+  if (pct >= 75) return `${pct}% - elevated`;
+  return `${pct}%`;
+}
+
+export function buildSystemHealth(agents: AgentSummary[], resources?: SystemResources): HealthItem[] {
   const toHealth = (s: AgentSummary["status"]): HealthItem["status"] => {
     if (s === "running") return "running";
     if (s === "online") return "healthy";
     if (s === "degraded") return "degraded";
     return "down";
   };
-  return agents.map((a) => ({
+
+  const resourceItems: HealthItem[] = resources
+    ? [
+        {
+          label: "Host CPU",
+          status: usageStatus(resources.cpuPct),
+          detail: usageDetail("cpu", resources.cpuPct),
+        },
+        {
+          label: "Host RAM",
+          status: usageStatus(resources.memoryPct),
+          detail: usageDetail("memory", resources.memoryPct),
+        },
+      ]
+    : [];
+
+  return [...resourceItems, ...agents.map((a) => ({
     label: a.name,
     status: toHealth(a.status),
     detail: a.currentTask ?? a.status,
-  }));
+  }))];
 }
 
-export function buildWorkspaces(): WorkspaceSummary[] {
-  const claude = (() => { try { return readClaudeSessions(200); } catch { return []; } })();
-  const codex  = (() => { try { return readCodexSessions(200); } catch { return []; } })();
-
+export function buildWorkspaces(
+  sessions: Session[] = readLiveSessionSnapshot().all,
+): WorkspaceSummary[] {
   const map = new Map<string, Set<string>>();
-  for (const s of claude) {
-    if (!s.workspace) continue;
-    if (!map.has(s.workspace)) map.set(s.workspace, new Set());
-    map.get(s.workspace)!.add("claude-code");
-  }
-  for (const s of codex) {
-    if (!s.workspace) continue;
-    if (!map.has(s.workspace)) map.set(s.workspace, new Set());
-    map.get(s.workspace)!.add("codex");
+  for (const session of sessions) {
+    if (!session.workspace) continue;
+    if (!map.has(session.workspace)) map.set(session.workspace, new Set());
+    map.get(session.workspace)?.add(session.agentId);
   }
 
   return [...map.entries()]
@@ -91,31 +138,9 @@ export function buildWorkspaces(): WorkspaceSummary[] {
     .sort((a, b) => b.agents - a.agents);
 }
 
-export function buildRecentSessions(): Session[] {
-  const claudeSessions = (() => { try { return readClaudeSessions(10); } catch { return []; } })();
-  const codexSessions  = (() => { try { return readCodexSessions(10); } catch { return []; } })();
-
-  const sessions: Session[] = [
-    ...claudeSessions.slice(0, 5).map((s) => ({
-      id: s.id,
-      agentId: "claude-code" as const,
-      title: s.title,
-      workspace: s.workspace,
-      status: s.status,
-      updatedAt: s.updatedAt,
-      group: s.group,
-    })),
-    ...codexSessions.slice(0, 5).map((s) => ({
-      id: s.id,
-      agentId: "codex" as const,
-      title: s.title,
-      workspace: s.workspace ?? undefined,
-      status: s.status,
-      updatedAt: s.updatedAt,
-      group: s.group,
-    })),
-  ];
-
+export function buildRecentSessions(
+  sessions: Session[] = readLiveSessionSnapshot().all,
+): Session[] {
   // Sort by recency — "just now" < "Xm ago" < "Xh ago"
   const weight = (u: string) => {
     if (u === "just now") return 0;

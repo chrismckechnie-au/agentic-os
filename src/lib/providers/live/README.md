@@ -1,8 +1,8 @@
-# Live providers (not yet implemented)
+# Live providers
 
-These stubs map each data source to where it really lives on the Ubuntu host.
-Implement them, compose them in `../index.ts` under `case "live"`, then run with
-`DATA_SOURCE=live`. The UI and API routes do not change.
+These providers map each data source to where it really lives on the Ubuntu host.
+Run with `DATA_SOURCE=live` to use them. The UI and API routes should continue
+to flow through the provider seam rather than reading host state directly.
 
 Everything here runs **server-side only** (filesystem, child processes, network).
 Never import these from a Client Component.
@@ -11,9 +11,9 @@ Never import these from a Client Component.
 | ---------------- | ---------------------------------------------------------------------- |
 | `claude-code.ts` | `~/.claude/projects/**` session JSONL transcripts + project metadata   |
 | `codex.ts`       | `~/.codex/**` session/rollout files                                    |
-| `hermes.ts`      | `~/.hermes/` — skills dir, FTS5 SQLite sessions, cron jobs, memory      |
+| `hermes.ts`      | `~/.hermes/` — skills dir, SQLite sessions, cron jobs, memory           |
 | `obsidian.ts`    | Obsidian vault folder (markdown files, frontmatter, links)             |
 | `github.ts`      | GitHub REST API (`GITHUB_TOKEN`), for the Repos section                |
 
-Each file exports the slice of `DataProvider` it owns; `index.ts` composes them
-into one object that satisfies the full interface.
+`index.ts` composes these readers into one object that satisfies the full
+`DataProvider` interface.

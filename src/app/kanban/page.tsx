@@ -1,8 +1,9 @@
 import type { CSSProperties } from "react";
-import { getKanbanTasks } from "@/lib/providers";
+import { getKanbanBoard } from "@/lib/providers";
+import { resolveDb } from "@/lib/providers/live/hermes-kanban";
 import { AGENTS } from "@/lib/config/agents";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { KanbanBoard } from "@/components/kanban/kanban-board";
+import { HermesKanban } from "@/components/kanban/hermes-kanban";
 import { Icon } from "@/components/icon";
 
 const ACCENT = AGENTS.hermes.accent;
@@ -19,12 +20,11 @@ function accentStyle(hex: string): CSSProperties {
 }
 
 export default async function KanbanPage() {
-  const { tasks, source, dbPath } = await getKanbanTasks();
-  const active = tasks.filter((t) => t.status !== "archived");
-  const running = active.filter((t) => t.status === "running").length;
-  const blocked = active.filter((t) => t.status === "blocked").length;
-  const done = active.filter((t) => t.status === "done").length;
+  const board = await getKanbanBoard();
+  const resolved = resolveDb();
+  const { source, stats, boardSlug } = board;
   const live = source === "live";
+  const degraded = source === "degraded";
 
   return (
     <div style={accentStyle(ACCENT)}>
@@ -39,32 +39,44 @@ export default async function KanbanPage() {
               className={
                 live
                   ? "flex items-center gap-1.5 rounded-full border border-ok/25 bg-ok/10 px-2 py-0.5 text-[11px] font-semibold text-ok"
-                  : "flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted"
+                  : degraded
+                    ? "flex items-center gap-1.5 rounded-full border border-warn/25 bg-warn/10 px-2 py-0.5 text-[11px] font-semibold text-warn"
+                    : "flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted"
               }
             >
-              <span className={`size-1.5 rounded-full ${live ? "bg-ok animate-pulse" : "bg-faint"}`} />
-              {live ? "LIVE" : "DEMO"}
+              <span
+                className={`size-1.5 rounded-full ${live ? "bg-ok animate-pulse" : degraded ? "bg-warn" : "bg-faint"}`}
+              />
+              {live ? "LIVE" : degraded ? "DEGRADED" : "DEMO"}
             </span>
-            <Stat label="Tasks" value={active.length} />
-            <Stat label="Running" value={running} dot="#34d399" />
-            <Stat label="Blocked" value={blocked} dot="#f59e0b" />
-            <Stat label="Done" value={done} dot="#10b981" />
+            <Stat label="Tasks" value={stats.active} />
+            <Stat label="Running" value={stats.running} dot="#34d399" />
+            <Stat label="Blocked" value={stats.blocked} dot="#f59e0b" />
+            <Stat label="Done" value={stats.done} dot="#10b981" />
           </div>
         }
       />
 
-      <KanbanBoard tasks={tasks} />
+      <HermesKanban initialBoard={board} boardHeightClass="max-h-[calc(100vh-230px)]" />
 
       <p className="mt-2 flex items-center gap-1.5 text-xs text-faint">
         <Icon name="Activity" size={12} />
         {live ? (
           <>
-            Live · reading <code className="font-mono text-[var(--accent)]">{dbPath}</code> · archived hidden
+            Live · reading <code className="font-mono text-[var(--accent)]">{resolved.dbPath}</code> · archived hidden
+            {boardSlug ? ` · board ${boardSlug}` : ""} · click a card for details
+          </>
+        ) : degraded ? (
+          <>
+            Degraded · reading <code className="font-mono text-[var(--accent)]">{resolved.dbPath}</code> failed
+            {boardSlug ? ` · board ${boardSlug}` : ""} · {resolved.resolution}
+            {resolved.reason ? ` · ${resolved.reason}` : ""} · archived hidden
           </>
         ) : (
           <>
-            Demo data · create <code className="font-mono text-[var(--accent)]">{dbPath}</code> (or set{" "}
+            Demo data · create <code className="font-mono text-[var(--accent)]">{resolved.dbPath}</code> (or set{" "}
             <code className="font-mono text-[var(--accent)]">HERMES_KANBAN_DB</code>) to go live · archived hidden
+            {resolved.reason ? ` · ${resolved.reason}` : ""}
           </>
         )}
       </p>

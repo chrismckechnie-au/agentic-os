@@ -1,8 +1,9 @@
 // Server-only. Derives a real activity / notification feed from local Claude + Codex + Hermes sessions.
 import type { ActivityItem } from "@/lib/types";
-import { readSessions as readClaudeSessions } from "@/lib/claude-code/reader";
-import { readSessions as readCodexSessions } from "@/lib/codex/reader";
-import { readSessions as readHermesSessions, stateDbExists } from "@/lib/hermes/state";
+import {
+  readLiveSessionSnapshot,
+  type LiveSessionSnapshot,
+} from "@/lib/providers/live/session-snapshot";
 
 // Recency weight for the "Xm ago" / "Xh ago" / "just now" labels the readers emit.
 function weight(u: string): number {
@@ -20,32 +21,38 @@ function statusIcon(status: string): string {
   return "MessageSquare";
 }
 
-export function buildActivity(limit = 8): ActivityItem[] {
-  const claude  = (() => { try { return readClaudeSessions(15); } catch { return []; } })();
-  const codex   = (() => { try { return readCodexSessions(15); } catch { return []; } })();
-  const hermes  = stateDbExists() ? (() => { try { return readHermesSessions(15); } catch { return []; } })() : [];
-
+export function buildActivity(
+  limit = 8,
+  snapshot: LiveSessionSnapshot = readLiveSessionSnapshot(),
+): ActivityItem[] {
   const items: ActivityItem[] = [
-    ...claude.map((s) => ({
+    ...snapshot.claude.slice(0, 15).map((s) => ({
       id: `cc-${s.id}`,
       icon: statusIcon(s.status),
       text: `Claude Code — ${s.title}`,
       when: s.updatedAt,
       agentId: "claude-code" as const,
     })),
-    ...codex.map((s) => ({
+    ...snapshot.codex.slice(0, 15).map((s) => ({
       id: `cx-${s.id}`,
       icon: statusIcon(s.status),
       text: `Codex — ${s.title}`,
       when: s.updatedAt,
       agentId: "codex" as const,
     })),
-    ...hermes.map((s) => ({
+    ...snapshot.hermes.slice(0, 15).map((s) => ({
       id: `hm-${s.id}`,
       icon: statusIcon(s.status),
       text: `Hermes — ${s.title}`,
       when: s.updatedAt,
       agentId: "hermes" as const,
+    })),
+    ...snapshot.obsidian.slice(0, 10).map((s) => ({
+      id: `ob-${s.id}`,
+      icon: "FileText",
+      text: `Obsidian — ${s.title}`,
+      when: s.updatedAt,
+      agentId: "obsidian" as const,
     })),
   ];
 

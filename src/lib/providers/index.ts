@@ -1,18 +1,17 @@
 import "server-only";
 
 import type { DataProvider } from "@/lib/providers/types";
-import type { KanbanTask } from "@/lib/types";
+import type { KanbanBoard, KanbanTask } from "@/lib/types";
 import { MockProvider } from "@/lib/providers/mock";
-import { dbExists, readTasks, resolveDbPath } from "@/lib/providers/live/hermes-kanban";
-
-// Resolve the active data provider once per process.
-//
-//   DATA_SOURCE=mock   (default) -> static fixtures, no I/O
-//   DATA_SOURCE=live             -> real sources (see ./live). Not built yet;
-//                                   throws until the live providers are wired.
-//
-// This factory is the ONLY place that decides where data comes from. The UI
-// and API routes depend on the DataProvider interface, never a concrete source.
+import { LiveProvider } from "@/lib/providers/live";
+import {
+  dbExists,
+  getDbHealth,
+  readBoardCursor,
+  readTasks,
+  resolveDb,
+} from "@/lib/providers/live/hermes-kanban";
+import { kanbanWritesEnabled } from "@/lib/hermes/kanban-write";
 
 let cached: DataProvider | null = null;
 
@@ -26,37 +25,106 @@ export function getProvider(): DataProvider {
       cached = new MockProvider();
       break;
     case "live":
+      cached = new LiveProvider();
+      break;
     default:
-      // Real data is wired directly in page.tsx / route handlers (not through
-      // the provider). MockProvider supplies the base scaffold that those
-      // readers override, so live mode falls through to mock here.
       cached = new MockProvider();
       break;
   }
 
-  return cached;
+  return cached ?? new MockProvider();
 }
 
 export interface KanbanResult {
   tasks: KanbanTask[];
-  source: "live" | "mock";
+  source: "live" | "mock" | "degraded";
   dbPath: string;
+  boardSlug?: string;
+  resolution: string;
+  reason?: string;
 }
 
 /**
- * Hermes kanban tasks. Reads the real ~/.hermes/kanban.db (or $HERMES_KANBAN_DB)
- * when that file exists; otherwise falls back to mock fixtures. This makes the
- * board genuinely live wherever the DB is present, independent of DATA_SOURCE,
- * and never breaks when Hermes hasn't created a board yet.
+ * Hermes kanban tasks. Reads the active Hermes board DB using Hermes' own
+ * resolution order; otherwise falls back to mock fixtures. This makes the board
+ * genuinely live wherever the DB is present, independent of DATA_SOURCE, and
+ * never breaks when Hermes hasn't created a board yet.
  */
 export async function getKanbanTasks(): Promise<KanbanResult> {
-  const dbPath = resolveDbPath();
-  if (dbExists(dbPath)) {
+  const resolved = resolveDb();
+  const dbPath = resolved.dbPath;
+  const health = getDbHealth(dbPath);
+  if (health.readable) {
     try {
-      return { tasks: readTasks(dbPath), source: "live", dbPath };
+      return {
+        tasks: readTasks(dbPath),
+        source: "live",
+        dbPath,
+        boardSlug: resolved.boardSlug,
+        resolution: resolved.resolution,
+      };
     } catch (err) {
       console.error("[kanban] live DB read failed; falling back to mock:", err);
+      return {
+        tasks: await getProvider().getKanban(),
+        source: "degraded",
+        dbPath,
+        boardSlug: resolved.boardSlug,
+        resolution: resolved.resolution,
+        reason: err instanceof Error ? err.message : "Live kanban DB read failed",
+      };
     }
   }
-  return { tasks: await getProvider().getKanban(), source: "mock", dbPath };
+  if (health.available && !health.readable) {
+    return {
+      tasks: await new MockProvider().getKanban(),
+      source: "degraded",
+      dbPath,
+      boardSlug: resolved.boardSlug,
+      resolution: resolved.resolution,
+      reason: health.reason,
+    };
+  }
+  if (dbExists(dbPath)) {
+    return {
+      tasks: await new MockProvider().getKanban(),
+      source: "degraded",
+      dbPath,
+      boardSlug: resolved.boardSlug,
+      resolution: resolved.resolution,
+      reason: "Live kanban DB is present but unreadable",
+    };
+  }
+  return {
+    tasks: await new MockProvider().getKanban(),
+    source: "mock",
+    dbPath,
+    boardSlug: resolved.boardSlug,
+    resolution: resolved.resolution,
+    reason: resolved.reason,
+  };
+}
+
+/**
+ * Board view for the live Kanban workspace: tasks + summary stats + a change
+ * cursor (max task_events.id) the client polls to know when to refetch.
+ */
+export async function getKanbanBoard(): Promise<KanbanBoard> {
+  const result = await getKanbanTasks();
+  const active = result.tasks.filter((t) => t.status !== "archived");
+  const cursor = result.source === "live" ? readBoardCursor(result.dbPath) : 0;
+  return {
+    tasks: result.tasks,
+    boardSlug: result.boardSlug,
+    source: result.source,
+    cursor,
+    stats: {
+      active: active.length,
+      running: active.filter((t) => t.status === "running").length,
+      blocked: active.filter((t) => t.status === "blocked").length,
+      review: active.filter((t) => t.status === "review").length,
+      done: active.filter((t) => t.status === "done").length,
+    },
+    writesEnabled: kanbanWritesEnabled(),
+  };
 }

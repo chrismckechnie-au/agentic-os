@@ -21,11 +21,11 @@ import type {
 // ---------------------------------------------------------------------------
 
 export const OVERVIEW_STATS: StatMetric[] = [
-  { id: "running-agents", label: "Running Agents", value: "4 / 4", hint: "All agents online", icon: "Activity", spark: [2, 3, 3, 4, 3, 4, 4] },
-  { id: "active-sessions", label: "Active Sessions", value: "12", delta: "+2 from last hour", trend: "up", icon: "MessageSquare", spark: [6, 7, 9, 8, 10, 11, 12] },
-  { id: "tasks-completed", label: "Tasks Completed", value: "248", delta: "+18 from last 24h", trend: "up", icon: "CircleCheck", spark: [180, 195, 205, 220, 230, 240, 248] },
-  { id: "success-rate", label: "Success Rate", value: "96.3%", delta: "+1.2% from last 24h", trend: "up", icon: "Target", spark: [93, 94, 94, 95, 95, 96, 96.3] },
-  { id: "active-workspaces", label: "Active Workspaces", value: "8", delta: "+1 from last 24h", trend: "up", icon: "FolderGit2", spark: [5, 6, 6, 7, 7, 8, 8] },
+  { id: "running-agents", label: "Running Agents", value: "4 / 4", hint: "All agents online", icon: "Activity", meterPct: 100, meterLabel: "4 of 4 running" },
+  { id: "host-cpu", label: "Host CPU", value: "42%", hint: "12 logical cores", icon: "Cpu", meterPct: 42, meterLabel: "Current system utilization" },
+  { id: "host-memory", label: "Host RAM", value: "68%", hint: "22 GB / 32 GB", icon: "MemoryStick", meterPct: 68, meterLabel: "10 GB free" },
+  { id: "active-sessions", label: "Active Sessions", value: "12", hint: "32 total sessions", icon: "MessageSquare", meterPct: 38, meterLabel: "12 of 32 active" },
+  { id: "active-workspaces", label: "Active Workspaces", value: "8", hint: "Unique across all agents", icon: "FolderGit2" },
 ];
 
 export const AGENTS_SUMMARY: AgentSummary[] = [
@@ -34,6 +34,7 @@ export const AGENTS_SUMMARY: AgentSummary[] = [
     name: "Claude Code",
     tagline: "AI assistant for coding, debugging and refactoring.",
     status: "running",
+    liveCliAvailable: true,
     lastSessionAgo: "2m ago",
     activeSession: "refuelr-chapter-12",
     currentTask: "Refactoring authentication middleware and improving session handling",
@@ -47,6 +48,7 @@ export const AGENTS_SUMMARY: AgentSummary[] = [
     name: "Codex",
     tagline: "OpenAI coding agent for autonomous development.",
     status: "running",
+    liveCliAvailable: true,
     lastSessionAgo: "5m ago",
     activeSession: "feature-auth-flow",
     currentTask: "Implementing rate limiting and updating API endpoints",
@@ -60,6 +62,7 @@ export const AGENTS_SUMMARY: AgentSummary[] = [
     name: "Hermes",
     tagline: "Autonomous AI agent for research and automation.",
     status: "online",
+    liveCliAvailable: true,
     lastSessionAgo: "8m ago",
     activeSession: "hermes-researcher",
     currentTask: "Optimize database query performance",
@@ -73,6 +76,7 @@ export const AGENTS_SUMMARY: AgentSummary[] = [
     name: "Obsidian",
     tagline: "Knowledge management and note-taking.",
     status: "online",
+    liveCliAvailable: false,
     lastSessionAgo: "10m ago",
     activeSession: "refuelr-kb-update",
     currentTask: "Updated 12 notes in knowledge base",
@@ -95,6 +99,8 @@ export const WORKSPACES: WorkspaceSummary[] = [
 ];
 
 export const HEALTH: HealthItem[] = [
+  { label: "Host CPU", status: "healthy", detail: "42%" },
+  { label: "Host RAM", status: "healthy", detail: "68%" },
   { label: "API", status: "healthy", detail: "120ms" },
   { label: "Database", status: "healthy", detail: "8ms" },
   { label: "Agents", status: "healthy", detail: "4/4" },
@@ -315,7 +321,7 @@ export const AGENT_STATS: Record<AgentId, StatMetric[]> = {
     { id: "ob-notes", label: "Notes", value: "1,284", delta: "+12 today", trend: "up", icon: "FileText", spark: [1240, 1255, 1262, 1270, 1276, 1280, 1284] },
     { id: "ob-links", label: "Backlinks", value: "9,612", delta: "+31 today", trend: "up", icon: "Link2", spark: [9400, 9480, 9520, 9560, 9580, 9600, 9612] },
     { id: "ob-tags", label: "Tags", value: "214", hint: "Across 9 vaults", icon: "Hash", spark: [200, 204, 206, 208, 210, 212, 214] },
-    { id: "ob-synced", label: "Sync Status", value: "Synced", hint: "Last sync 2m ago", icon: "RefreshCw", spark: [1, 1, 1, 1, 1, 1, 1] },
+    { id: "ob-tasks", label: "Open Tasks", value: "2", hint: "4 tasks indexed", icon: "ListChecks", spark: [4, 4, 3, 3, 2, 2, 2] },
   ],
 };
 
@@ -350,11 +356,18 @@ export const OBSIDIAN_NOTES: Note[] = [
     title: "Project Overview",
     updatedAt: "10m ago",
     group: "Today",
-    body: `# Project Overview
+    path: "Projects/Project Overview.md",
+    tags: ["refuelr", "platform"],
+    body: `---
+title: Project Overview
+tags: [refuelr, platform]
+---
+# Project Overview
 
 ## Refuelr Platform
 
 Refuelr is an AI-powered platform that helps users build and scale their projects with intelligent automation.
+See [[Meeting notes — product sync]] and [[Research notes — RAG architectures]] for current context.
 
 ### Key Features
 
@@ -375,24 +388,31 @@ Refuelr is an AI-powered platform that helps users build and scale their project
     title: "Meeting notes — product sync",
     updatedAt: "1h ago",
     group: "Today",
+    path: "Operations/Meeting notes — product sync.md",
+    tags: ["meeting", "product"],
     body: `# Product Sync
 
 - Reviewed Q3 roadmap
 - Agreed to ship social login next sprint
-- Open question: rate limiting strategy`,
+- Open question: rate limiting strategy
+- Follow-up: [[Project Overview]] needs launch checklist`,
   },
   {
     id: "research-notes",
     title: "Research notes — RAG architectures",
     updatedAt: "1d ago",
     group: "Yesterday",
+    path: "Research/RAG architectures.md",
+    tags: ["research", "rag"],
     body: `# RAG architectures
 
 Comparing vector databases for retrieval-augmented generation.
 
 - pgvector — simple, lives in Postgres
 - Qdrant — fast, great filtering
-- Weaviate — hybrid search`,
+- Weaviate — hybrid search
+
+Related: [[Project Overview]] and [[Unresolved vendor memo]]`,
   },
 ];
 

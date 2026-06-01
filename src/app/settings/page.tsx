@@ -58,7 +58,8 @@ export default function SettingsPage() {
           </CardHeader>
           <CardBody className="pt-0">
             <p className="mb-3 text-sm text-muted">
-              Set your monthly token budget per agent. Used to calculate % remaining in the sidebar and on agent pages.
+              Set your monthly token budget per agent. These values back the local token-budget views across the
+              dashboard.
             </p>
             <TokenBudgetSettings />
           </CardBody>

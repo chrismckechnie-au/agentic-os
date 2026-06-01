@@ -6,6 +6,27 @@ import { Icon } from "@/components/icon";
 import { AGENTS } from "@/lib/config/agents";
 import type { ActivityItem } from "@/lib/types";
 
+const DISMISSED_NOTIFICATIONS_KEY = "agentic-os:dismissed-notifications";
+
+function readDismissedNotifications(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string").slice(-200) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissedNotifications(ids: string[]) {
+  try {
+    window.localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(ids.slice(-200)));
+  } catch {
+    // Best-effort persistence only.
+  }
+}
+
 function Dropdown({
   open,
   onClose,
@@ -28,16 +49,52 @@ function Dropdown({
   );
 }
 
-export function TopBar({ notifications = [] }: { notifications?: ActivityItem[] }) {
+const SYSTEM_STYLES = {
+  healthy: {
+    className: "border-ok/25 bg-ok/10 text-ok",
+    dot: "bg-ok",
+  },
+  running: {
+    className: "border-[var(--accent)]/25 bg-[var(--accent)]/10 text-[var(--accent)]",
+    dot: "bg-[var(--accent)]",
+  },
+  degraded: {
+    className: "border-warn/25 bg-warn/10 text-warn",
+    dot: "bg-warn",
+  },
+  down: {
+    className: "border-danger/25 bg-danger/10 text-danger",
+    dot: "bg-danger",
+  },
+} as const;
+
+export function TopBar({
+  notifications = [],
+  systemState = "healthy",
+  systemLabel = "System ready",
+}: {
+  notifications?: ActivityItem[];
+  systemState?: keyof typeof SYSTEM_STYLES;
+  systemLabel?: string;
+}) {
   const [open, setOpen] = useState<"org" | "bell" | "avatar" | null>(null);
+  const [dismissedNotifications, setDismissedNotifications] = useState<string[]>(() => readDismissedNotifications());
   const toggle = (m: "org" | "bell" | "avatar") => setOpen((v) => (v === m ? null : m));
   const close = () => setOpen(null);
-  const count = notifications.length;
+  const visibleNotifications = notifications.filter((item) => !dismissedNotifications.includes(item.id));
+  const count = visibleNotifications.length;
+  const systemStyle = SYSTEM_STYLES[systemState] ?? SYSTEM_STYLES.healthy;
+
+  const clearNotifications = () => {
+    const next = [...new Set([...dismissedNotifications, ...notifications.map((item) => item.id)])];
+    setDismissedNotifications(next);
+    writeDismissedNotifications(next);
+  };
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-line bg-canvas/70 px-6 backdrop-blur">
+    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-canvas/70 px-4 backdrop-blur sm:gap-4 sm:px-6">
       {/* Search (command palette deferred — input is inert for now) */}
-      <label className="flex h-9 w-full max-w-md items-center gap-2.5 rounded-lg border border-line bg-surface-2 px-3 text-sm text-faint">
+      <label className="flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-line bg-surface-2 px-3 text-sm text-faint sm:max-w-md">
         <Icon name="Search" size={16} />
         <input
           placeholder="Search anything..."
@@ -45,7 +102,7 @@ export function TopBar({ notifications = [] }: { notifications?: ActivityItem[] 
         />
       </label>
 
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         {/* Org switcher */}
         <div className="relative hidden sm:block">
           <button
@@ -71,9 +128,11 @@ export function TopBar({ notifications = [] }: { notifications?: ActivityItem[] 
         </div>
 
         {/* System status */}
-        <span className="hidden h-9 items-center gap-2 rounded-lg border border-ok/25 bg-ok/10 px-3 text-sm font-medium text-ok md:flex">
-          <span className="size-2 rounded-full bg-ok animate-pulse" />
-          System Healthy
+        <span
+          className={`hidden h-9 items-center gap-2 rounded-lg border px-3 text-sm font-medium md:flex ${systemStyle.className}`}
+        >
+          <span className={`size-2 rounded-full ${systemStyle.dot} animate-pulse`} />
+          {systemLabel}
         </span>
 
         {/* Notifications */}
@@ -93,17 +152,25 @@ export function TopBar({ notifications = [] }: { notifications?: ActivityItem[] 
 
             <div className="flex items-center justify-between px-3 py-1.5">
               <span className="text-xs font-semibold text-ink">Notifications</span>
-              <Link href="/logs" onClick={close} className="text-[11px] font-medium text-[var(--accent)] hover:underline">
-                View all
-              </Link>
+              <div className="flex items-center gap-3">
+                {count > 0 && (
+                  <button onClick={clearNotifications} className="text-[11px] font-medium text-faint hover:text-ink">
+                    Clear
+                  </button>
+                )}
+                <Link href="/logs" onClick={close} className="text-[11px] font-medium text-[var(--accent)] hover:underline">
+                  View all
+                </Link>
+              </div>
             </div>
             <div className="my-1 border-t border-line" />
             {count === 0 ? (
               <p className="px-3 py-6 text-center text-xs text-faint">No recent activity.</p>
             ) : (
               <ul className="max-h-80 overflow-y-auto">
-                {notifications.slice(0, 8).map((n) => {
+                {visibleNotifications.slice(0, 8).map((n) => {
                   const accent = n.agentId ? AGENTS[n.agentId].accent : "var(--accent)";
+                  const icon = n.agentId ? AGENTS[n.agentId].icon : n.icon;
                   return (
                     <li key={n.id}>
                       <Link
@@ -115,7 +182,7 @@ export function TopBar({ notifications = [] }: { notifications?: ActivityItem[] 
                           className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border border-line"
                           style={{ color: accent, background: `color-mix(in srgb, ${accent} 12%, transparent)` }}
                         >
-                          <Icon name={n.icon} size={12} />
+                          <Icon name={icon} size={12} />
                         </span>
                         <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted">{n.text}</span>
                         <span className="shrink-0 text-[10px] text-faint">{n.when}</span>

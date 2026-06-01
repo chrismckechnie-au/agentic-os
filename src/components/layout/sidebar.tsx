@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -108,53 +108,17 @@ function Section({
   );
 }
 
-interface UsageData {
-  available: boolean;
-  totalTokens: number;
-  outputTokens: number;
-  sessions: number;
-}
-
-function fmt(n: number): string {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
-}
-
-interface TokenBudgets { "claude-code": number; codex: number; }
-interface BudgetResponse { resolved: TokenBudgets; }
-
 export function Sidebar({ agentStatuses }: { agentStatuses?: Record<string, AgentStatus> }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [usage, setUsage] = useState<UsageData | null>(null);
-  const [budgets, setBudgets] = useState<TokenBudgets>({ "claude-code": 1_000_000, codex: 500_000 });
-
-  useEffect(() => {
-    fetch("/api/claude-code/usage")
-      .then((r) => r.json())
-      .then((d) => setUsage(d))
-      .catch(() => {});
-    fetch("/api/config/token-budget")
-      .then((r) => r.json())
-      .then((d: BudgetResponse) => { if (d.resolved) setBudgets(d.resolved); })
-      .catch(() => {});
-  }, []);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
-  const totalTokens = usage?.totalTokens ?? 0;
-  const budget = budgets["claude-code"];
-  const usedPct = budget > 0 ? Math.min(100, Math.round((totalTokens / budget) * 100)) : 0;
-  const remainPct = 100 - usedPct;
-  const barColor = usedPct >= 95 ? "bg-danger" : usedPct >= 80 ? "bg-warn" : "bg-[var(--accent)]";
-
   return (
     <aside
       className={cn(
-        "sticky top-0 flex h-screen shrink-0 flex-col border-r border-line bg-surface/60 backdrop-blur transition-all",
+        "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line bg-surface/60 backdrop-blur transition-all min-[960px]:flex",
         collapsed ? "w-[68px]" : "w-60",
       )}
     >
@@ -184,32 +148,6 @@ export function Sidebar({ agentStatuses }: { agentStatuses?: Record<string, Agen
 
       {/* Footer: plan + collapse */}
       <div className="border-t border-line p-3">
-        {!collapsed && (
-          <div className="mb-3 rounded-[var(--radius-card)] border border-line p-3" style={{ background: "rgba(20,22,28,0.66)" }}>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
-                Claude Code
-              </span>
-              <span className="font-mono text-[11px] text-faint">
-                {usage?.available ? `${remainPct}% left` : "—"}
-              </span>
-            </div>
-            <div className="mt-2 h-[5px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
-              <div
-                className={`h-full rounded-full transition-all duration-1000 ${barColor}`}
-                style={{ width: `${usage?.available ? usedPct : 0}%` }}
-              />
-            </div>
-            {usage?.available ? (
-              <p className="mt-2 text-[11px] text-faint">
-                {fmt(totalTokens)} / {fmt(budget)} tokens this month
-              </p>
-            ) : (
-              <p className="mt-2 text-[11px] text-faint">Loading usage…</p>
-            )}
-          </div>
-        )}
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-ink"

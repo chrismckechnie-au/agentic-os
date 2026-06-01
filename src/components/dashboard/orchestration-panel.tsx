@@ -1,25 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icon";
 import { AGENTS } from "@/lib/config/agents";
 import type { AgentSummary } from "@/lib/types";
-
-function useLive(base: number, amp: number, ms = 2200) {
-  const [v, setV] = useState(base);
-  useEffect(() => {
-    const id = setInterval(
-      () =>
-        setV(
-          Math.max(0, Math.min(100, Math.round((base + (Math.random() - 0.5) * amp) * 10) / 10)),
-        ),
-      ms,
-    );
-    return () => clearInterval(id);
-  }, [base, amp, ms]);
-  return v;
-}
 
 const STATUS_MAP: Record<string, { label: string; dotColor: string; bg: string; border: string; text: string }> = {
   running:  { label: "Running",  dotColor: "#34d399", bg: "color-mix(in srgb,#34d399 13%,transparent)", border: "color-mix(in srgb,#34d399 26%,transparent)", text: "#34d399" },
@@ -48,32 +32,15 @@ function StatusPill({ status, pulse }: { status: string; pulse?: boolean }) {
   );
 }
 
-function MeterBar({ pct, color }: { pct: number; color: string }) {
-  return (
-    <div className="h-[5px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
-      <div
-        className="h-full rounded-full transition-[width] duration-1000"
-        style={{
-          width: `${pct}%`,
-          background: color,
-          boxShadow: `0 0 8px color-mix(in srgb, ${color} 55%, transparent)`,
-        }}
-      />
-    </div>
-  );
-}
-
 function AgentRow({ agent }: { agent: AgentSummary }) {
   const cfg = AGENTS[agent.id];
   const live = agent.status === "running";
-  const cpu = useLive(agent.cpu ?? 20, 8);
-  const mem = useLive(agent.mem ?? 40, 5);
 
   return (
     <Link
       href={`/agents/${agent.id}`}
       className="grid items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-white/[0.025]"
-      style={{ gridTemplateColumns: "auto minmax(0,1fr) 128px" }}
+      style={{ gridTemplateColumns: "auto minmax(0,1fr)" }}
     >
       {/* Agent glyph */}
       <span
@@ -110,20 +77,6 @@ function AgentRow({ agent }: { agent: AgentSummary }) {
               <Icon name="Clock" size={11} /> up {agent.uptime}
             </span>
           )}
-        </div>
-      </div>
-
-      {/* CPU / MEM meters */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2">
-          <span className="w-6 text-[9px] font-semibold uppercase tracking-wider text-faint">CPU</span>
-          <div className="flex-1"><MeterBar pct={cpu} color={cfg.accent} /></div>
-          <span className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted">{Math.round(cpu)}%</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-6 text-[9px] font-semibold uppercase tracking-wider text-faint">MEM</span>
-          <div className="flex-1"><MeterBar pct={mem} color="#9aa1ad" /></div>
-          <span className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted">{Math.round(mem)}%</span>
         </div>
       </div>
     </Link>
