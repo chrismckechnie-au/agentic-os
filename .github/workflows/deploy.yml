@@ -77,12 +77,14 @@ jobs:
             # Tailscale may require root unless this user has been set as the operator.
             sudo -n tailscale set --operator="$USER" || true
             tailscale serve --yes --bg "$serve_target" && tailscale serve status && exit 0
-            sudo -n tailscale serve --yes --bg "$serve_target"
-            sudo -n tailscale serve status
-            exit 0
+            if sudo -n tailscale serve --yes --bg "$serve_target"; then
+              sudo -n tailscale serve status
+              exit 0
+            fi
           fi
-          echo "Failed to configure Tailscale Serve for ${serve_target}."
-          exit 1
+          echo "Tailscale Serve was not configured for ${serve_target}."
+          echo "Run once on the host: sudo tailscale set --operator=\$USER && tailscale serve --yes --bg ${serve_target}"
+          exit 0
 
       - name: Verify readiness
         run: |
