@@ -16,13 +16,13 @@ export function StatCard({ stat }: { stat: StatMetric }) {
 
   return (
     <Card className="p-4">
-      <div className="flex items-center gap-2 text-muted">
+      <div className="flex min-h-5 items-center gap-2 text-muted">
         {stat.icon && (
-          <span className="text-[var(--accent)]">
+          <span className="flex size-4 shrink-0 items-center justify-center text-[var(--accent)]">
             <Icon name={stat.icon} size={16} />
           </span>
         )}
-        <span className="text-xs font-medium">{stat.label}</span>
+        <span className="text-xs font-medium leading-none">{stat.label}</span>
       </div>
 
       <div className="mt-2.5 text-3xl font-bold tracking-tight tabular-nums">{stat.value}</div>
