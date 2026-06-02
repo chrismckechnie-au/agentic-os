@@ -14,8 +14,8 @@ export default async function CommandCenterPage() {
 
   const metrics = [
     { icon: "Cpu", label: "Agents", value: hermes.crew.length, hint: "in crew" },
-    { icon: "Target", label: "Missions", value: hermes.missions.length, hint: "active" },
-    { icon: "Zap", label: "Dispatched", value: hermes.dispatchLog.length, hint: "this session" },
+    { icon: "Target", label: "Tasks", value: hermes.jobs.length, hint: "active" },
+    { icon: "Zap", label: "Running", value: hermes.stats.runningTasks, hint: "this session" },
     { icon: "TrendingUp", label: "Uptime", value: "99.8%", hint: "system health" },
   ];
 
@@ -56,7 +56,7 @@ export default async function CommandCenterPage() {
                 boxShadow: `inset 0 1px 0 rgba(255,255,255,0.14), 0 0 40px -10px color-mix(in srgb, ${HERMES_ACCENT} 70%, transparent)`,
               }}
             >
-              <Icon name="HermesLogo" size={34} style={{ color: HERMES_ACCENT }} />
+              <Icon name="HermesLogo" size={34} color={HERMES_ACCENT} />
               <div
                 className="absolute -inset-1.5 rounded-[24px] border pointer-events-none animate-pulse"
                 style={{ borderColor: `color-mix(in srgb, ${HERMES_ACCENT} 30%, transparent)` }}
@@ -71,7 +71,7 @@ export default async function CommandCenterPage() {
               </div>
               <h1 className="text-[30px] font-[680] -tracking-[0.03em] leading-none mt-1 mb-1">Hermes</h1>
               <div className="text-[13px] text-[var(--color-ink-2)]">
-                Autonomous orchestration — commanding {hermes.crew.length} agents across {hermes.missions.length} active missions.
+                Autonomous orchestration — commanding {hermes.crew.length} agents with {hermes.stats.runningTasks} tasks running.
               </div>
             </div>
 
@@ -154,12 +154,12 @@ export default async function CommandCenterPage() {
               </a>
             </div>
             <div className="divide-y divide-[var(--color-line)]">
-              {hermes.missions.slice(0, 3).map((m) => (
-                <div key={m.id} className="p-[14px_18px]">
+              {hermes.jobs.slice(0, 3).map((j, idx) => (
+                <div key={idx} className="p-[14px_18px]">
                   <div className="flex items-center gap-2 mb-[10px]">
-                    <Icon name="Target" size={15} style={{ color: "#c084fc" }} />
-                    <span className="text-[13.5px] font-semibold flex-1">{m.title}</span>
-                    <span className="text-[12px] font-semibold text-[var(--color-ink-2)]">{Math.round(Math.random() * 100)}%</span>
+                    <Icon name="Target" size={15} color="#c084fc" />
+                    <span className="text-[13.5px] font-semibold flex-1">{j.name}</span>
+                    <span className="text-[12px] font-semibold text-[var(--color-ink-2)]">Active</span>
                   </div>
                   <div className="h-[5px] rounded-full bg-[var(--color-surface-3)] overflow-hidden mb-3">
                     <div className="h-full rounded-full" style={{ width: "65%", background: `linear-gradient(90deg, var(--accent), var(--accent-2))` }} />
@@ -169,8 +169,8 @@ export default async function CommandCenterPage() {
                       <div className="size-[18px] rounded-full border border-[var(--color-line-strong)] flex items-center justify-center text-[11px]" style={{ background: "#34d399", borderColor: "#34d399", color: "#04130c" }}>
                         <Icon name="Check" size={11} />
                       </div>
-                      <span className="text-[var(--color-ink-2)]">Research completed</span>
-                      <span className="text-[10.5px] text-[var(--color-faint)] ml-auto">done</span>
+                      <span className="text-[var(--color-ink-2)]">{j.schedule || "manual"}</span>
+                      <span className="text-[10.5px] text-[var(--color-faint)] ml-auto">running</span>
                     </div>
                   </div>
                 </div>
@@ -192,7 +192,8 @@ export default async function CommandCenterPage() {
             </div>
             <div className="divide-y divide-[var(--color-line)]">
               {hermes.crew.slice(0, 4).map((c) => {
-                const agent = AGENTS[c.id];
+                const agent = AGENTS[c.id as keyof typeof AGENTS];
+                if (!agent) return null;
                 return (
                   <a key={c.id} href={`/agents/${c.id}`} className="flex items-center gap-3 p-[13px_18px] hover:bg-[var(--color-surface-hover)] transition-colors" style={{ "--aa": agent.accent } as any}>
                     <div className="size-[38px] rounded-[9px] flex items-center justify-center text-[12px] font-semibold shrink-0" style={{ background: agent.accent, color: "white" }}>
@@ -228,12 +229,12 @@ export default async function CommandCenterPage() {
               </span>
             </div>
             <div className="divide-y divide-[color-mix(in_srgb,var(--color-line)_60%,transparent)]">
-              {hermes.dispatchLog.slice(0, 6).map((d, idx) => (
+              {hermes.activity.slice(0, 6).map((a, idx) => (
                 <div key={idx} className="flex items-center gap-2.5 px-[18px] py-[9px] text-[12px]">
                   <span className="flex items-center gap-2" style={{ color: "#a855f7" }}>
                     <Icon name="Send" size={13} />
                   </span>
-                  <span className="text-[var(--color-ink-2)] flex-1 truncate">{d.action || "Task dispatched"}</span>
+                  <span className="text-[var(--color-ink-2)] flex-1 truncate">{a.title || "Task dispatched"}</span>
                   <span className="text-[10px] text-[var(--color-faint)] flex-none whitespace-nowrap">now</span>
                 </div>
               ))}
