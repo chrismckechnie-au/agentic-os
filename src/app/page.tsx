@@ -103,7 +103,7 @@ export default async function CommandCenterPage() {
     <div className="mx-auto max-w-[1320px]">
       {/* ---- Hero Section ---- */}
       <section
-        className="relative mb-4 overflow-hidden rounded-[14px] border p-[26px] backdrop-blur"
+        className="relative mb-4 overflow-hidden rounded-[14px] border p-[16px] md:p-[26px] backdrop-blur"
         style={{
           background: `
             radial-gradient(520px 260px at 88% -30%, color-mix(in srgb, ${HERMES_ACCENT} 30%, transparent), transparent 70%),
@@ -126,17 +126,17 @@ export default async function CommandCenterPage() {
 
         <div className="relative">
           {/* Hero Top */}
-          <div className="flex items-start gap-[18px] mb-[22px]">
+          <div className="flex items-start gap-[12px] md:gap-[18px] mb-[22px]">
             {/* Orb */}
             <div
-              className="relative flex size-16 shrink-0 items-center justify-center rounded-[19px] border"
+              className="relative flex size-14 md:size-16 shrink-0 items-center justify-center rounded-[19px] border"
               style={{
                 background: `linear-gradient(150deg, color-mix(in srgb, ${HERMES_ACCENT} 32%, transparent), color-mix(in srgb, ${HERMES_ACCENT} 10%, transparent))`,
                 borderColor: `color-mix(in srgb, ${HERMES_ACCENT} 45%, transparent)`,
                 boxShadow: `inset 0 1px 0 rgba(255,255,255,0.14), 0 0 40px -10px color-mix(in srgb, ${HERMES_ACCENT} 70%, transparent)`,
               }}
             >
-              <Icon name="HermesLogo" size={34} color={HERMES_ACCENT} />
+              <Icon name="HermesLogo" size={28} className="md:!w-[34px] md:!h-[34px]" color={HERMES_ACCENT} />
               <div
                 className="absolute -inset-1.5 rounded-[24px] border pointer-events-none animate-pulse"
                 style={{ borderColor: `color-mix(in srgb, ${HERMES_ACCENT} 30%, transparent)` }}
@@ -145,24 +145,25 @@ export default async function CommandCenterPage() {
 
             {/* ID + Title */}
             <div className="flex-1 min-w-0">
-              <div className="inline-flex items-center gap-[7px] text-[11px] font-semibold uppercase tracking-widest" style={{ color: "#c084fc" }}>
+              <div className="inline-flex items-center gap-[7px] text-[10px] md:text-[11px] font-semibold uppercase tracking-widest" style={{ color: "#c084fc" }}>
                 <span className="size-2 rounded-full" style={{ background: "#34d399" }} />
-                Command Center · Online
+                <span className="hidden sm:inline">Command Center · Online</span>
+                <span className="sm:hidden">Online</span>
               </div>
-              <h1 className="text-[30px] font-[680] -tracking-[0.03em] leading-none mt-1 mb-1">Hermes</h1>
-              <div className="text-[13px] text-[var(--color-ink-2)]">
+              <h1 className="text-[22px] md:text-[30px] font-[680] -tracking-[0.03em] leading-none mt-1 mb-1">Hermes</h1>
+              <div className="text-[12px] md:text-[13px] text-[var(--color-ink-2)]">
                 Autonomous orchestration — commanding {hermes.crew.length} agents with {hermes.stats.runningTasks} tasks running.
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-[9px]">
-              <button className="inline-flex items-center gap-2 px-[13px] py-2 rounded-[10px] text-[13px] font-[550] border border-[var(--color-line-2)] text-[var(--color-ink-2)] bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] transition-colors">
+            <div className="flex gap-2 md:gap-[9px] flex-shrink-0">
+              <button className="hidden md:inline-flex items-center gap-2 px-[13px] py-2 rounded-[10px] text-[13px] font-[550] border border-[var(--color-line-2)] text-[var(--color-ink-2)] bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] transition-colors">
                 <Icon name="Radio" size={14} />
                 <span>Crew</span>
               </button>
               <button
-                className="inline-flex items-center gap-2 px-[13px] py-2 rounded-[10px] text-[13px] font-[550] text-white transition-[filter,colors] hover:brightness-110"
+                className="inline-flex items-center gap-1 md:gap-2 px-[11px] md:px-[13px] py-2 rounded-[10px] text-[12px] md:text-[13px] font-[550] text-white transition-[filter,colors] hover:brightness-110"
                 style={{
                   background: `linear-gradient(150deg, ${HERMES_ACCENT}, #c084fc)`,
                   boxShadow: `0 10px 26px -12px ${HERMES_ACCENT}, inset 0 1px 0 rgba(255,255,255,0.3)`,
@@ -175,7 +176,7 @@ export default async function CommandCenterPage() {
           </div>
 
           {/* Metrics Grid */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {metrics.map((m) => (
               <div
                 key={m.label}
@@ -219,8 +220,8 @@ export default async function CommandCenterPage() {
           </div>
         ) : (
           <>
-            <div className="px-4 py-2">
-              <svg viewBox="0 0 1180 460" className="w-full h-auto" role="img" aria-label="Hermes orchestration graph">
+            <div className="px-3 md:px-4 py-2 overflow-x-auto">
+              <svg viewBox="0 0 1180 460" className="w-full h-auto min-w-max md:min-w-0" role="img" aria-label="Hermes orchestration graph">
                 <defs>
                   <radialGradient id="hub-grad" cx="50%" cy="36%" r="68%">
                     <stop offset="0%" stopColor="#c9a0ff" />
@@ -306,7 +307,7 @@ export default async function CommandCenterPage() {
       </div>
 
       {/* ---- Main Grid: Missions + Crew/Dispatch ---- */}
-      <div className="grid grid-cols-[1.55fr_1fr] gap-4 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-[1.55fr_1fr] gap-4 items-start">
         {/* Left: Missions */}
         <div className="space-y-4">
           {/* Missions */}
