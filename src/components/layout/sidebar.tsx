@@ -24,6 +24,10 @@ const ACTIVITY: Item[] = [
   { href: "/logs", label: "Logs", icon: "ScrollText" },
 ];
 
+const INTEGRATIONS: Item[] = [
+  { href: "/discord", label: "Discord", icon: "DiscordLogo", badge: "3" },
+];
+
 const SYSTEM: Item[] = [{ href: "/settings", label: "Settings", icon: "Settings" }];
 
 const AGENT_ITEMS: Item[] = AGENT_ORDER.map((id) => ({
@@ -142,6 +146,7 @@ export function Sidebar({ agentStatuses }: { agentStatuses?: Record<string, Agen
         <Section title="Agents" items={AGENT_ITEMS} isActive={isActive} agentStatuses={agentStatuses} />
         <Section title="Workspace" items={WORKSPACE} isActive={isActive} />
         <Section title="Activity" items={ACTIVITY} isActive={isActive} />
+        <Section title="Integrations" items={INTEGRATIONS} isActive={isActive} />
         <Section title="System" items={SYSTEM} isActive={isActive} />
       </nav>
 
