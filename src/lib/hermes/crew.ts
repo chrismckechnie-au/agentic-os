@@ -73,15 +73,41 @@ function fallbackModel(raw: string | null): string | undefined {
   return fallback?.[1]?.trim() || undefined;
 }
 
+function normalizeProfileId(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Resolve a crew profile's on-disk directory. Prefers an exact id match, but
+// tolerates hyphenation drift between the config id and the actual profile
+// folder (e.g. config "refuelrops" vs. on-disk "refuelr-ops") so a renamed
+// profile doesn't get reported as "missing".
+function resolveProfileDir(home: string, id: string): string | undefined {
+  const exact = profileRoot(home, id);
+  if (isDirectory(exact)) return exact;
+
+  const profilesDir = path.join(home, "profiles");
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(profilesDir);
+  } catch {
+    return undefined;
+  }
+  const target = normalizeProfileId(id);
+  const match = entries.find((entry) => normalizeProfileId(entry) === target);
+  if (!match) return undefined;
+  const resolved = path.join(profilesDir, match);
+  return isDirectory(resolved) ? resolved : undefined;
+}
+
 function readProfileSources(home: string): CrewProfileSource[] {
   return HERMES_CREW.map((def) => {
-    const root = profileRoot(home, def.id);
-    const exists = isDirectory(root);
+    const root = resolveProfileDir(home, def.id);
+    const exists = root !== undefined;
     const config = exists ? readText(path.join(root, "config.yaml")) : null;
     return {
       id: def.id,
       exists,
-      home: exists ? root : undefined,
+      home: root,
       model: configValue(config, "default"),
       fallbackModel: fallbackModel(config),
       provider: configValue(config, "provider"),

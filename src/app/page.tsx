@@ -49,10 +49,10 @@ export default async function CommandCenterPage() {
   ];
 
   // Hub-and-spoke layout for the orchestration graph (Hermes hub -> crew).
-  const graphCx = 300;
-  const graphCy = 150;
-  const graphRx = 205;
-  const graphRy = 96;
+  const graphCx = 380;
+  const graphCy = 200;
+  const graphRx = 285;
+  const graphRy = 135;
   const graphNodes = hermes.crew.map((c, i) => {
     const theta = (2 * Math.PI * i) / Math.max(hermes.crew.length, 1) - Math.PI / 2;
     return {
@@ -182,13 +182,28 @@ export default async function CommandCenterPage() {
                 No crew profiles detected — Hermes orchestration is idle.
               </div>
             ) : (
-              <div className="p-3">
-                <svg viewBox="0 0 600 300" className="w-full h-auto" role="img" aria-label="Hermes orchestration graph">
+              <div className="p-5">
+                <svg viewBox="0 0 760 400" className="w-full h-auto" role="img" aria-label="Hermes orchestration graph">
                   <defs>
-                    <radialGradient id="hub-grad" cx="50%" cy="40%" r="65%">
-                      <stop offset="0%" stopColor="#c084fc" />
-                      <stop offset="100%" stopColor="#7c3aed" />
+                    <radialGradient id="hub-grad" cx="50%" cy="38%" r="68%">
+                      <stop offset="0%" stopColor="#c9a0ff" />
+                      <stop offset="55%" stopColor="#a855f7" />
+                      <stop offset="100%" stopColor="#6d28d9" />
                     </radialGradient>
+                    <filter id="soft-glow" x="-70%" y="-70%" width="240%" height="240%">
+                      <feGaussianBlur stdDeviation="5" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                    <filter id="hub-glow" x="-120%" y="-120%" width="340%" height="340%">
+                      <feGaussianBlur stdDeviation="11" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
                   </defs>
 
                   {/* Edges: hub -> each crew node */}
@@ -200,28 +215,30 @@ export default async function CommandCenterPage() {
                       x2={x}
                       y2={y}
                       stroke={accent}
-                      strokeOpacity={0.28}
-                      strokeWidth={1.5}
+                      strokeOpacity={0.4}
+                      strokeWidth={2}
+                      strokeLinecap="round"
                     />
                   ))}
 
                   {/* Crew nodes */}
                   {graphNodes.map(({ profile, x, y, accent }) => (
                     <g key={`node-${profile.id}`}>
-                      <circle cx={x} cy={y} r={20} fill={accent} fillOpacity={0.16} stroke={accent} strokeWidth={1.5} />
-                      <text x={x} y={y + 4} textAnchor="middle" fontSize={13} fontWeight={700} fill={accent}>
+                      <circle cx={x} cy={y} r={30} fill={accent} fillOpacity={0.14} stroke={accent} strokeWidth={2} filter="url(#soft-glow)" />
+                      <text x={x} y={y + 6} textAnchor="middle" fontSize={19} fontWeight={700} fill={accent}>
                         {profile.name.charAt(0)}
                       </text>
-                      <circle cx={x + 14} cy={y - 14} r={4} fill={statusDot(profile.status)} stroke="#0a0c11" strokeWidth={1.5} />
-                      <text x={x} y={y + 36} textAnchor="middle" fontSize={10.5} fontWeight={600} fill="#c8ccd6">
+                      <circle cx={x + 21} cy={y - 21} r={6} fill={statusDot(profile.status)} stroke="#0a0c11" strokeWidth={2} />
+                      <text x={x} y={y + 52} textAnchor="middle" fontSize={13} fontWeight={600} fill="#c8ccd6">
                         {profile.name}
                       </text>
                     </g>
                   ))}
 
                   {/* Central Hermes hub */}
-                  <circle cx={graphCx} cy={graphCy} r={30} fill="url(#hub-grad)" stroke="#a855f7" strokeWidth={2} />
-                  <text x={graphCx} y={graphCy + 4} textAnchor="middle" fontSize={12} fontWeight={700} fill="#ffffff">
+                  <circle className="live-dot" cx={graphCx} cy={graphCy} r={56} fill="none" stroke="#a855f7" strokeOpacity={0.35} strokeWidth={1.5} />
+                  <circle cx={graphCx} cy={graphCy} r={44} fill="url(#hub-grad)" stroke="#c9a0ff" strokeWidth={2.5} filter="url(#hub-glow)" />
+                  <text x={graphCx} y={graphCy + 5} textAnchor="middle" fontSize={15} fontWeight={700} fill="#ffffff" letterSpacing="0.2">
                     Hermes
                   </text>
                 </svg>
