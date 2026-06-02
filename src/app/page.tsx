@@ -2,13 +2,44 @@ export const dynamic = "force-dynamic";
 
 import { getHermesCrewDashboard } from "@/lib/providers";
 import { Icon } from "@/components/icon";
-import { AGENTS } from "@/lib/config/agents";
+import { HERMES_CREW_ROLE_LABELS } from "@/lib/config/hermes-crew";
+import type { HermesCrewRole } from "@/lib/types";
+
+// Hermes accent color (purple)
+const HERMES_ACCENT = "#a855f7";
+
+// Crew profile ids (refuelr-*) don't map to the AGENTS registry, so the crew
+// roster and orchestration graph are driven by each profile's own role.
+const ROLE_ACCENT: Record<HermesCrewRole, string> = {
+  orchestrator: "#a855f7",
+  engineering: "#60a5fa",
+  incidents: "#f87171",
+  social: "#f5b13d",
+  research: "#2dd4bf",
+};
+
+const ROLE_ICON: Record<HermesCrewRole, string> = {
+  orchestrator: "Workflow",
+  engineering: "Cpu",
+  incidents: "ShieldCheck",
+  social: "SendHorizontal",
+  research: "BookOpen",
+};
+
+const STATUS_DOT: Record<string, string> = {
+  running: "#34d399",
+  online: "#34d399",
+  attention: "#f5b13d",
+  missing: "#f87171",
+  idle: "#5f6675",
+};
+
+function statusDot(status: string): string {
+  return STATUS_DOT[status] ?? "#5f6675";
+}
 
 export default async function CommandCenterPage() {
   const hermes = await getHermesCrewDashboard();
-
-  // Hermes accent color (purple)
-  const HERMES_ACCENT = "#a855f7";
 
   const metrics = [
     { icon: "Cpu", label: "Agents", value: hermes.crew.length, hint: "in crew" },
@@ -16,6 +47,21 @@ export default async function CommandCenterPage() {
     { icon: "Zap", label: "Running", value: hermes.stats.runningTasks, hint: "this session" },
     { icon: "TrendingUp", label: "Uptime", value: "99.8%", hint: "system health" },
   ];
+
+  // Hub-and-spoke layout for the orchestration graph (Hermes hub -> crew).
+  const graphCx = 300;
+  const graphCy = 150;
+  const graphRx = 205;
+  const graphRy = 96;
+  const graphNodes = hermes.crew.map((c, i) => {
+    const theta = (2 * Math.PI * i) / Math.max(hermes.crew.length, 1) - Math.PI / 2;
+    return {
+      profile: c,
+      x: graphCx + graphRx * Math.cos(theta),
+      y: graphCy + graphRy * Math.sin(theta),
+      accent: ROLE_ACCENT[c.role] ?? HERMES_ACCENT,
+    };
+  });
 
   return (
     <div className="mx-auto max-w-[1320px]">
@@ -131,10 +177,56 @@ export default async function CommandCenterPage() {
                 Dispatching
               </span>
             </div>
-            <div className="p-4 text-center text-[var(--color-muted)] text-[12px]">
-              <p>Orchestration graph visualization would render here</p>
-              <p className="text-[10px] mt-2 text-[var(--color-faint)]">(Requires SVG rendering from Hermes data)</p>
-            </div>
+            {graphNodes.length === 0 ? (
+              <div className="p-6 text-center text-[var(--color-muted)] text-[12px]">
+                No crew profiles detected — Hermes orchestration is idle.
+              </div>
+            ) : (
+              <div className="p-3">
+                <svg viewBox="0 0 600 300" className="w-full h-auto" role="img" aria-label="Hermes orchestration graph">
+                  <defs>
+                    <radialGradient id="hub-grad" cx="50%" cy="40%" r="65%">
+                      <stop offset="0%" stopColor="#c084fc" />
+                      <stop offset="100%" stopColor="#7c3aed" />
+                    </radialGradient>
+                  </defs>
+
+                  {/* Edges: hub -> each crew node */}
+                  {graphNodes.map(({ profile, x, y, accent }) => (
+                    <line
+                      key={`edge-${profile.id}`}
+                      x1={graphCx}
+                      y1={graphCy}
+                      x2={x}
+                      y2={y}
+                      stroke={accent}
+                      strokeOpacity={0.28}
+                      strokeWidth={1.5}
+                    />
+                  ))}
+
+                  {/* Crew nodes */}
+                  {graphNodes.map(({ profile, x, y, accent }) => (
+                    <g key={`node-${profile.id}`}>
+                      <circle cx={x} cy={y} r={20} fill={accent} fillOpacity={0.16} stroke={accent} strokeWidth={1.5} />
+                      <text x={x} y={y + 4} textAnchor="middle" fontSize={13} fontWeight={700} fill={accent}>
+                        {profile.name.charAt(0)}
+                      </text>
+                      <circle cx={x + 14} cy={y - 14} r={4} fill={statusDot(profile.status)} stroke="#0a0c11" strokeWidth={1.5} />
+                      <text x={x} y={y + 36} textAnchor="middle" fontSize={10.5} fontWeight={600} fill="#c8ccd6">
+                        {profile.name}
+                      </text>
+                    </g>
+                  ))}
+
+                  {/* Central Hermes hub */}
+                  <circle cx={graphCx} cy={graphCy} r={30} fill="url(#hub-grad)" stroke="#a855f7" strokeWidth={2} />
+                  <text x={graphCx} y={graphCy + 4} textAnchor="middle" fontSize={12} fontWeight={700} fill="#ffffff">
+                    Hermes
+                  </text>
+                </svg>
+              </div>
+            )}
           </div>
 
           {/* Missions */}
@@ -187,24 +279,33 @@ export default async function CommandCenterPage() {
               <span className="text-[10px] font-semibold uppercase text-[var(--color-faint)] tracking-wider">{hermes.crew.length} commanded</span>
             </div>
             <div className="divide-y divide-[var(--color-line)]">
-              {hermes.crew.slice(0, 4).map((c) => {
-                const agent = AGENTS[c.id as keyof typeof AGENTS];
-                if (!agent) return null;
+              {hermes.crew.length === 0 && (
+                <div className="p-[18px] text-center text-[12px] text-[var(--color-muted)]">No crew profiles available.</div>
+              )}
+              {hermes.crew.slice(0, 5).map((c) => {
+                const accent = ROLE_ACCENT[c.role] ?? HERMES_ACCENT;
                 return (
-                  <a key={c.id} href={`/agents/${c.id}`} className="flex items-center gap-3 p-[13px_18px] hover:bg-[var(--color-surface-hover)] transition-colors" style={{ "--aa": agent.accent } as any}>
-                    <div className="size-[38px] rounded-[9px] flex items-center justify-center text-[12px] font-semibold shrink-0" style={{ background: agent.accent, color: "white" }}>
-                      {agent.name[0]}
+                  <a key={c.id} href="/agents/hermes" className="flex items-center gap-3 p-[13px_18px] hover:bg-[var(--color-surface-hover)] transition-colors">
+                    <div
+                      className="size-[38px] rounded-[9px] flex items-center justify-center shrink-0"
+                      style={{
+                        color: accent,
+                        background: `color-mix(in srgb, ${accent} 18%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${accent} 40%, transparent)`,
+                      }}
+                    >
+                      <Icon name={ROLE_ICON[c.role] ?? "Workflow"} size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-semibold text-[var(--color-ink)]">{agent.name}</div>
-                      <div className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--color-faint)] mt-[2px]">{c.role}</div>
+                      <div className="text-[13px] font-semibold text-[var(--color-ink)] truncate">{c.name}</div>
+                      <div className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--color-faint)] mt-[2px]">{HERMES_CREW_ROLE_LABELS[c.role]}</div>
                     </div>
                     <div className="flex flex-col items-end gap-1.5 text-right">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-semibold" style={{ color: agent.accent, background: `color-mix(in srgb, ${agent.accent} 13%, transparent)` }}>
-                        <span className="size-1.5 rounded-full animate-pulse" style={{ background: agent.accent }} />
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-semibold" style={{ color: accent, background: `color-mix(in srgb, ${accent} 13%, transparent)` }}>
+                        <span className="size-1.5 rounded-full" style={{ background: statusDot(c.status) }} />
                         {c.status}
                       </span>
-                      <span className="text-[10.5px] text-[var(--color-faint)]">dispatched {Math.floor(Math.random() * 20) + 1}</span>
+                      <span className="text-[10.5px] text-[var(--color-faint)]">{c.openTasks} open · {c.runningTasks} running</span>
                     </div>
                   </a>
                 );
