@@ -1,13 +1,11 @@
 export const dynamic = "force-dynamic";
 
-import { getHermesCrewDashboard, getProvider } from "@/lib/providers";
+import { getHermesCrewDashboard } from "@/lib/providers";
 import { Icon } from "@/components/icon";
 import { AGENTS } from "@/lib/config/agents";
 
 export default async function CommandCenterPage() {
   const hermes = await getHermesCrewDashboard();
-  const provider = await getProvider();
-  const overview = await provider.getOverview();
 
   // Hermes accent color (purple)
   const HERMES_ACCENT = "#a855f7";
@@ -82,13 +80,11 @@ export default async function CommandCenterPage() {
                 <span>Crew</span>
               </button>
               <button
-                className="inline-flex items-center gap-2 px-[13px] py-2 rounded-[10px] text-[13px] font-[550] text-white transition-colors"
+                className="inline-flex items-center gap-2 px-[13px] py-2 rounded-[10px] text-[13px] font-[550] text-white transition-[filter,colors] hover:brightness-110"
                 style={{
                   background: `linear-gradient(150deg, ${HERMES_ACCENT}, #c084fc)`,
                   boxShadow: `0 10px 26px -12px ${HERMES_ACCENT}, inset 0 1px 0 rgba(255,255,255,0.3)`,
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(1.07)")}
-                onMouseLeave={(e) => (e.currentTarget.style.filter = "brightness(1)")}
               >
                 <Icon name="Workflow" size={14} />
                 <span>Dispatch task</span>
