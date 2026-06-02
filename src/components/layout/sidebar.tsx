@@ -8,16 +8,15 @@ import { Icon } from "@/components/icon";
 import { AGENT_ORDER, AGENTS } from "@/lib/config/agents";
 
 type AgentStatus = "online" | "offline" | "running" | "degraded";
-type Item = { href: string; label: string; icon: string; accent?: string; dot?: boolean };
+type Item = { href: string; label: string; icon: string; accent?: string; dot?: boolean; badge?: string };
 
 const MAIN: Item[] = [
   { href: "/", label: "Overview", icon: "LayoutGrid" },
-  { href: "/kanban", label: "Kanban", icon: "SquareKanban" },
+  { href: "/kanban", label: "Kanban", icon: "SquareKanban", badge: "12" },
 ];
 
 const WORKSPACE: Item[] = [
-  { href: "/repos", label: "Repositories", icon: "FolderGit2" },
-  { href: "/workspaces", label: "Workspaces", icon: "Boxes" },
+  { href: "/repos", label: "Repositories", icon: "FolderGit2", badge: "5" },
 ];
 
 const ACTIVITY: Item[] = [
@@ -41,34 +40,42 @@ function dotColor(status: AgentStatus | undefined): string {
   return "bg-faint";
 }
 
-function NavLink({ item, collapsed, active, agentStatus }: { item: Item; collapsed: boolean; active: boolean; agentStatus?: AgentStatus }) {
+function NavLink({ item, active, agentStatus }: { item: Item; active: boolean; agentStatus?: AgentStatus }) {
   return (
     <Link
       href={item.href}
-      title={collapsed ? item.label : undefined}
       className={cn(
-        "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-        active ? "bg-surface-2 text-ink" : "text-muted hover:bg-surface-2/60 hover:text-ink",
+        "group relative flex items-center gap-[11px] rounded-[8px] px-[11px] py-2 text-[13.5px] font-medium transition-colors",
+        active
+          ? "bg-[var(--accent-soft)] text-[var(--accent-ink)] "
+          : "text-[var(--color-ink-2)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]",
       )}
     >
       {active && (
         <span
-          className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full"
+          className="absolute -left-3 top-1/2 h-[18px] w-[3px] rounded-r-[3px] -translate-y-1/2"
           style={{ background: item.accent ?? "var(--accent)" }}
         />
       )}
-      <span className="relative flex size-5 shrink-0 items-center justify-center">
+      <span className={cn("relative flex size-[17px] shrink-0 items-center justify-center",
+        active && !item.accent ? "text-[var(--accent-2)]" : active && item.accent ? "text-[var(--accent-2)]" : "text-[var(--color-muted)]")}>
         <Icon
           name={item.icon}
-          size={18}
-          className={cn(active && !item.accent && "text-[var(--accent)]")}
+          size={17}
           color={item.accent && active ? item.accent : undefined}
         />
         {item.dot && (
-          <span className={`absolute -right-1 -top-0.5 size-1.5 rounded-full ring-2 ring-surface ${dotColor(agentStatus)}`} />
+          <span className={`absolute -right-1 -top-0.5 size-2 rounded-full ring-2 ring-[var(--color-canvas-2)] ${dotColor(agentStatus)}`} />
         )}
       </span>
-      {!collapsed && <span className="truncate">{item.label}</span>}
+      <span className="truncate">{item.label}</span>
+      {item.badge && (
+        <span className={cn("ml-auto text-[10.5px] font-semibold rounded-full px-[7px] py-0.5 text-center",
+          active ? "text-[var(--accent-ink)] bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]" : "text-[var(--color-muted)] bg-[var(--color-surface-3)]"
+        )}>
+          {item.badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -76,29 +83,25 @@ function NavLink({ item, collapsed, active, agentStatus }: { item: Item; collaps
 function Section({
   title,
   items,
-  collapsed,
   isActive,
   agentStatuses,
 }: {
   title?: string;
   items: Item[];
-  collapsed: boolean;
   isActive: (href: string) => boolean;
   agentStatuses?: Record<string, AgentStatus>;
 }) {
   return (
-    <div className="space-y-0.5">
-      {title && !collapsed && (
-        <p className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-faint">{title}</p>
+    <div className="flex flex-col gap-[2px]">
+      {title && (
+        <p className="px-[12px] py-[6px] pt-[14px] text-[10px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">{title}</p>
       )}
-      {title && collapsed && <div className="mt-3 mb-1 border-t border-line" />}
       {items.map((it) => {
         const agentId = it.href.startsWith("/agents/") ? it.href.replace("/agents/", "") : undefined;
         return (
           <NavLink
             key={it.href}
             item={it}
-            collapsed={collapsed}
             active={isActive(it.href)}
             agentStatus={agentId ? agentStatuses?.[agentId] : undefined}
           />
@@ -110,51 +113,52 @@ function Section({
 
 export function Sidebar({ agentStatuses }: { agentStatuses?: Record<string, AgentStatus> }) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
   return (
     <aside
-      className={cn(
-        "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line bg-surface/60 backdrop-blur transition-all min-[960px]:flex",
-        collapsed ? "w-[68px]" : "w-60",
-      )}
+      className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r gap-[4px] px-3 py-4 border-[var(--color-line)] bg-gradient-to-b from-[rgba(255,255,255,0.02)] to-transparent bg-[var(--color-canvas-2)] overflow-y-auto min-[960px]:flex"
+      style={{ width: "240px", padding: "16px 12px" }}
     >
       {/* Brand */}
-      <div className="flex h-16 items-center gap-2.5 px-4">
+      <div className="flex items-center gap-[10px] pb-[6px] pt-2">
         <span
-          className="grid size-8 place-items-center rounded-lg text-white"
-          style={{ background: "linear-gradient(135deg,#7c6cff,#9d7cff)" }}
+          className="grid size-8 place-items-center rounded-[9px] flex-none text-white"
+          style={{ background: "linear-gradient(150deg, var(--accent), var(--accent-2))", boxShadow: "0 6px 18px -8px var(--accent), inset 0 1px 0 rgba(255,255,255,0.4)" }}
         >
-          <Icon name="Hexagon" size={18} />
+          <Icon name="Boxes" size={18} />
         </span>
-        {!collapsed && (
-          <span className="text-[15px] font-bold tracking-tight">
-            AGENTIC <span className="text-[var(--accent)]">OS</span>
-          </span>
-        )}
+        <div className="flex flex-col">
+          <span className="text-[14.5px] font-semibold tracking-tight">Agentic OS</span>
+          <span className="text-[10.5px] text-[var(--color-faint)]">Control plane</span>
+        </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 pb-3">
-        <Section items={MAIN} collapsed={collapsed} isActive={isActive} />
-        <Section title="AI Agents" items={AGENT_ITEMS} collapsed={collapsed} isActive={isActive} agentStatuses={agentStatuses} />
-        <Section title="Workspace" items={WORKSPACE} collapsed={collapsed} isActive={isActive} />
-        <Section title="Activity" items={ACTIVITY} collapsed={collapsed} isActive={isActive} />
-        <Section title="System" items={SYSTEM} collapsed={collapsed} isActive={isActive} />
+      <nav className="flex-1 overflow-y-auto space-y-1">
+        <Section items={MAIN} isActive={isActive} />
+        <Section title="Agents" items={AGENT_ITEMS} isActive={isActive} agentStatuses={agentStatuses} />
+        <Section title="Workspace" items={WORKSPACE} isActive={isActive} />
+        <Section title="Activity" items={ACTIVITY} isActive={isActive} />
+        <Section title="System" items={SYSTEM} isActive={isActive} />
       </nav>
 
-      {/* Footer: plan + collapse */}
-      <div className="border-t border-line p-3">
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-        >
-          <Icon name="ChevronsLeft" size={18} className={cn("transition-transform", collapsed && "rotate-180")} />
-          {!collapsed && <span>Collapse</span>}
-        </button>
+      {/* Footer: User chip */}
+      <div className="border-t border-[var(--color-line)] pt-[12px]">
+        <div className="flex items-center gap-[10px] px-[10px] py-2 rounded-[11px] border border-[var(--color-line)] bg-[var(--color-surface-2)]">
+          <span className="grid size-[30px] place-items-center rounded-[8px] flex-none text-[12px] font-semibold text-[var(--color-ink-2)] bg-gradient-to-br from-[#2a2d39] to-[#1a1c24]">
+            CM
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[12.5px] font-medium">Chris M.</div>
+            <div className="text-[10.5px] text-[var(--color-faint)]">Admin · self-hosted</div>
+          </div>
+          <button className="flex-none size-[30px] rounded-[8px] flex items-center justify-center text-[var(--color-muted)] transition-colors hover:bg-[var(--color-surface-hover)]">
+            <Icon name="LogOut" size={15} />
+          </button>
+        </div>
       </div>
     </aside>
   );
