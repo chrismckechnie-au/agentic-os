@@ -38,6 +38,42 @@ function statusDot(status: string): string {
   return STATUS_DOT[status] ?? "#5f6675";
 }
 
+function titleCase(value: string): string {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
+// Orchestration graph geometry (SVG user units; the <svg> scales to card width).
+const HUB_X = 235;
+const HUB_Y = 230;
+const HUB_R = 82;
+const NODE_X = 905;
+const NODE_R = 40;
+const LIST_TOP = 72;
+const LIST_BOTTOM = 388;
+
+// Smooth horizontal S-curve connector from the hub edge to a node edge.
+function edgePath(sx: number, sy: number, ex: number, ey: number): string {
+  const c1x = sx + (ex - sx) * 0.5;
+  const c2x = ex - (ex - sx) * 0.5;
+  return `M ${sx} ${sy} C ${c1x} ${sy}, ${c2x} ${ey}, ${ex} ${ey}`;
+}
+
+// 4-point sparkle (Hermes mark) centered at (cx, cy).
+function sparklePoints(cx: number, cy: number, outer: number, inner: number): string {
+  return [
+    [cx, cy - outer],
+    [cx + inner, cy - inner],
+    [cx + outer, cy],
+    [cx + inner, cy + inner],
+    [cx, cy + outer],
+    [cx - inner, cy + inner],
+    [cx - outer, cy],
+    [cx - inner, cy - inner],
+  ]
+    .map(([px, py]) => `${px},${py}`)
+    .join(" ");
+}
+
 export default async function CommandCenterPage() {
   const hermes = await getHermesCrewDashboard();
 
@@ -48,17 +84,17 @@ export default async function CommandCenterPage() {
     { icon: "TrendingUp", label: "Uptime", value: "99.8%", hint: "system health" },
   ];
 
-  // Hub-and-spoke layout for the orchestration graph (Hermes hub -> crew).
-  const graphCx = 380;
-  const graphCy = 200;
-  const graphRx = 285;
-  const graphRy = 135;
+  // Left-hub layout: Hermes on the left, crew stacked on the right with curved
+  // "dispatch flow" connectors.
+  const crewCount = hermes.crew.length;
   const graphNodes = hermes.crew.map((c, i) => {
-    const theta = (2 * Math.PI * i) / Math.max(hermes.crew.length, 1) - Math.PI / 2;
+    const y =
+      crewCount > 1
+        ? LIST_TOP + (i * (LIST_BOTTOM - LIST_TOP)) / (crewCount - 1)
+        : (LIST_TOP + LIST_BOTTOM) / 2;
     return {
       profile: c,
-      x: graphCx + graphRx * Math.cos(theta),
-      y: graphCy + graphRy * Math.sin(theta),
+      y,
       accent: ROLE_ACCENT[c.role] ?? HERMES_ACCENT,
     };
   });
@@ -161,91 +197,118 @@ export default async function CommandCenterPage() {
         </div>
       </section>
 
-      {/* ---- Main Grid: Orchestration + Crew/Dispatch ---- */}
-      <div className="grid grid-cols-[1.55fr_1fr] gap-4 items-start">
-        {/* Left: Orchestration + Missions */}
-        <div className="space-y-4">
-          {/* Orchestration */}
-          <div className="panel">
-            <div className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-[18px] py-3">
-              <div className="flex items-center gap-2">
-                <Icon name="Orbit" size={15} className="text-[var(--color-muted)]" />
-                <h3 className="text-[14px] font-semibold">Orchestration</h3>
-              </div>
-              <span className="inline-flex items-center gap-1.5 px-[9px] py-[3px_9px] rounded-full text-[11px] font-semibold" style={{ color: "#34d399", background: "color-mix(in srgb, #34d399 13%, transparent)" }}>
-                <span className="size-1.5 rounded-full animate-pulse" style={{ background: "#34d399" }} />
-                Dispatching
+      {/* ---- Orchestration (full width) ---- */}
+      <div className="panel mb-4">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-[18px] py-3">
+          <div className="flex items-center gap-2">
+            <Icon name="Orbit" size={15} className="text-[var(--color-muted)]" />
+            <h3 className="text-[14px] font-semibold">Orchestration</h3>
+          </div>
+          <span
+            className="inline-flex items-center gap-1.5 px-[11px] py-[5px] rounded-full text-[12px] font-semibold border"
+            style={{ color: "#34d399", borderColor: "color-mix(in srgb, #34d399 35%, transparent)", background: "color-mix(in srgb, #34d399 12%, transparent)" }}
+          >
+            <span className="size-2 rounded-full animate-pulse" style={{ background: "#34d399" }} />
+            Dispatching
+          </span>
+        </div>
+
+        {graphNodes.length === 0 ? (
+          <div className="p-6 text-center text-[var(--color-muted)] text-[12px]">
+            No crew profiles detected — Hermes orchestration is idle.
+          </div>
+        ) : (
+          <>
+            <div className="px-4 py-2">
+              <svg viewBox="0 0 1180 460" className="w-full h-auto" role="img" aria-label="Hermes orchestration graph">
+                <defs>
+                  <radialGradient id="hub-grad" cx="50%" cy="36%" r="68%">
+                    <stop offset="0%" stopColor="#c9a0ff" />
+                    <stop offset="55%" stopColor="#a855f7" />
+                    <stop offset="100%" stopColor="#6d28d9" />
+                  </radialGradient>
+                  <radialGradient id="hub-aura" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="#a855f7" stopOpacity="0.45" />
+                    <stop offset="55%" stopColor="#a855f7" stopOpacity="0.12" />
+                    <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
+                  </radialGradient>
+                  <filter id="soft-glow" x="-70%" y="-70%" width="240%" height="240%">
+                    <feGaussianBlur stdDeviation="4" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                  <filter id="hub-glow" x="-120%" y="-120%" width="340%" height="340%">
+                    <feGaussianBlur stdDeviation="10" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                </defs>
+
+                {/* Hub aura */}
+                <circle cx={HUB_X} cy={HUB_Y} r={130} fill="url(#hub-aura)" />
+
+                {/* Dispatch-flow edges (under hub + nodes) */}
+                {graphNodes.map(({ profile, y, accent }) => (
+                  <path
+                    key={`edge-${profile.id}`}
+                    className="dash-flow"
+                    d={edgePath(HUB_X + HUB_R - 6, HUB_Y, NODE_X - NODE_R, y)}
+                    fill="none"
+                    stroke={accent}
+                    strokeOpacity={0.9}
+                    strokeWidth={3}
+                    strokeDasharray="9 9"
+                    strokeLinecap="round"
+                  />
+                ))}
+
+                {/* Hermes hub */}
+                <circle className="live-dot" cx={HUB_X} cy={HUB_Y} r={HUB_R + 22} fill="none" stroke="#a855f7" strokeOpacity={0.3} strokeWidth={1.5} />
+                <circle cx={HUB_X} cy={HUB_Y} r={HUB_R + 12} fill="none" stroke="#a855f7" strokeOpacity={0.5} strokeWidth={1.5} />
+                <circle cx={HUB_X} cy={HUB_Y} r={HUB_R} fill="url(#hub-grad)" stroke="#c9a0ff" strokeWidth={2.5} filter="url(#hub-glow)" />
+                <polygon points={sparklePoints(HUB_X, HUB_Y - 8, 26, 9)} fill="#ffffff" />
+                <text x={HUB_X} y={HUB_Y + 46} textAnchor="middle" fontSize={17} fontWeight={700} fill="#ffffff">Hermes</text>
+
+                {/* Crew nodes */}
+                {graphNodes.map(({ profile, y, accent }) => (
+                  <g key={`node-${profile.id}`}>
+                    <circle cx={NODE_X} cy={y} r={NODE_R} fill={accent} fillOpacity={0.12} stroke={accent} strokeWidth={2} filter="url(#soft-glow)" />
+                    <foreignObject x={NODE_X - 19} y={y - 19} width={38} height={38}>
+                      <div style={{ display: "flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
+                        <Icon name={ROLE_ICON[profile.role] ?? "Workflow"} size={21} color={accent} />
+                      </div>
+                    </foreignObject>
+                    <circle cx={NODE_X + 28} cy={y - 28} r={6.5} fill={statusDot(profile.status)} stroke="#0a0c11" strokeWidth={2.5} />
+                    <text x={NODE_X + NODE_R + 22} y={y - 4} fontSize={18} fontWeight={700} fill="#f1f2f6">{profile.name}</text>
+                    <text x={NODE_X + NODE_R + 22} y={y + 20} fontSize={14} fill="#969cab">
+                      {HERMES_CREW_ROLE_LABELS[profile.role]} · {titleCase(profile.status)}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+            </div>
+
+            {/* Legend */}
+            <div className="flex flex-wrap items-center gap-x-7 gap-y-2 border-t border-[var(--color-line)] px-[18px] py-3 text-[12px] text-[var(--color-muted)]">
+              <span className="inline-flex items-center gap-2">
+                <span className="inline-block h-0 w-7 border-t-2 border-dashed" style={{ borderColor: "#a855f7" }} />
+                live dispatch flow
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <span className="size-2.5 rounded-full" style={{ background: "#34d399" }} />
+                working
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <span className="size-2.5 rounded-full" style={{ background: "#f5b13d" }} />
+                degraded
               </span>
             </div>
-            {graphNodes.length === 0 ? (
-              <div className="p-6 text-center text-[var(--color-muted)] text-[12px]">
-                No crew profiles detected — Hermes orchestration is idle.
-              </div>
-            ) : (
-              <div className="p-5">
-                <svg viewBox="0 0 760 400" className="w-full h-auto" role="img" aria-label="Hermes orchestration graph">
-                  <defs>
-                    <radialGradient id="hub-grad" cx="50%" cy="38%" r="68%">
-                      <stop offset="0%" stopColor="#c9a0ff" />
-                      <stop offset="55%" stopColor="#a855f7" />
-                      <stop offset="100%" stopColor="#6d28d9" />
-                    </radialGradient>
-                    <filter id="soft-glow" x="-70%" y="-70%" width="240%" height="240%">
-                      <feGaussianBlur stdDeviation="5" result="blur" />
-                      <feMerge>
-                        <feMergeNode in="blur" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
-                    </filter>
-                    <filter id="hub-glow" x="-120%" y="-120%" width="340%" height="340%">
-                      <feGaussianBlur stdDeviation="11" result="blur" />
-                      <feMerge>
-                        <feMergeNode in="blur" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
-                    </filter>
-                  </defs>
+          </>
+        )}
+      </div>
 
-                  {/* Edges: hub -> each crew node */}
-                  {graphNodes.map(({ profile, x, y, accent }) => (
-                    <line
-                      key={`edge-${profile.id}`}
-                      x1={graphCx}
-                      y1={graphCy}
-                      x2={x}
-                      y2={y}
-                      stroke={accent}
-                      strokeOpacity={0.4}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                    />
-                  ))}
-
-                  {/* Crew nodes */}
-                  {graphNodes.map(({ profile, x, y, accent }) => (
-                    <g key={`node-${profile.id}`}>
-                      <circle cx={x} cy={y} r={30} fill={accent} fillOpacity={0.14} stroke={accent} strokeWidth={2} filter="url(#soft-glow)" />
-                      <text x={x} y={y + 6} textAnchor="middle" fontSize={19} fontWeight={700} fill={accent}>
-                        {profile.name.charAt(0)}
-                      </text>
-                      <circle cx={x + 21} cy={y - 21} r={6} fill={statusDot(profile.status)} stroke="#0a0c11" strokeWidth={2} />
-                      <text x={x} y={y + 52} textAnchor="middle" fontSize={13} fontWeight={600} fill="#c8ccd6">
-                        {profile.name}
-                      </text>
-                    </g>
-                  ))}
-
-                  {/* Central Hermes hub */}
-                  <circle className="live-dot" cx={graphCx} cy={graphCy} r={56} fill="none" stroke="#a855f7" strokeOpacity={0.35} strokeWidth={1.5} />
-                  <circle cx={graphCx} cy={graphCy} r={44} fill="url(#hub-grad)" stroke="#c9a0ff" strokeWidth={2.5} filter="url(#hub-glow)" />
-                  <text x={graphCx} y={graphCy + 5} textAnchor="middle" fontSize={15} fontWeight={700} fill="#ffffff" letterSpacing="0.2">
-                    Hermes
-                  </text>
-                </svg>
-              </div>
-            )}
-          </div>
-
+      {/* ---- Main Grid: Missions + Crew/Dispatch ---- */}
+      <div className="grid grid-cols-[1.55fr_1fr] gap-4 items-start">
+        {/* Left: Missions */}
+        <div className="space-y-4">
           {/* Missions */}
           <div className="panel">
             <div className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-[18px] py-3">
