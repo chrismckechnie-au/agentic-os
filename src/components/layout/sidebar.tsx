@@ -11,7 +11,7 @@ type AgentStatus = "online" | "offline" | "running" | "degraded";
 type Item = { href: string; label: string; icon: string; accent?: string; dot?: boolean; badge?: string };
 
 const MAIN: Item[] = [
-  { href: "/", label: "Overview", icon: "LayoutGrid" },
+  { href: "/", label: "Command Center", icon: "Orbit" },
   { href: "/kanban", label: "Kanban", icon: "SquareKanban", badge: "12" },
 ];
 
