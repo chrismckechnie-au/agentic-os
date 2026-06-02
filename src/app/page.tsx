@@ -1,245 +1,271 @@
 export const dynamic = "force-dynamic";
 
-import { getHermesCrewDashboard, getProvider } from "@/lib/providers";
+import Link from "next/link";
+import { getHermesCrewDashboard } from "@/lib/providers";
 import { Icon } from "@/components/icon";
-import { AGENTS } from "@/lib/config/agents";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge, StatusBadge } from "@/components/ui/badge";
+import type { HermesCrewProfileStatus, HermesCrewRole } from "@/lib/types";
+
+function roleIcon(role: HermesCrewRole): string {
+  switch (role) {
+    case "engineering":
+      return "Cpu";
+    case "incidents":
+      return "ShieldCheck";
+    case "social":
+      return "SendHorizontal";
+    case "research":
+      return "BookOpen";
+    default:
+      return "Workflow";
+  }
+}
+
+function profileTone(status: HermesCrewProfileStatus): "ok" | "info" | "warn" | "danger" | "muted" {
+  switch (status) {
+    case "running":
+      return "ok";
+    case "online":
+      return "info";
+    case "attention":
+      return "warn";
+    case "missing":
+      return "danger";
+    default:
+      return "muted";
+  }
+}
+
+function profileLabel(status: HermesCrewProfileStatus): string {
+  switch (status) {
+    case "running":
+      return "Running";
+    case "online":
+      return "Online";
+    case "attention":
+      return "Attention";
+    case "missing":
+      return "Missing";
+    default:
+      return "Idle";
+  }
+}
 
 export default async function CommandCenterPage() {
   const hermes = await getHermesCrewDashboard();
-  const provider = await getProvider();
-  const overview = await provider.getOverview();
-
-  // Hermes accent color (purple)
-  const HERMES_ACCENT = "#a855f7";
 
   const metrics = [
-    { icon: "Cpu", label: "Agents", value: hermes.crew.length, hint: "in crew" },
-    { icon: "Target", label: "Tasks", value: hermes.jobs.length, hint: "active" },
-    { icon: "Zap", label: "Running", value: hermes.stats.runningTasks, hint: "this session" },
-    { icon: "TrendingUp", label: "Uptime", value: "99.8%", hint: "system health" },
+    { label: "Profiles", value: String(hermes.stats.profiles), hint: `${hermes.stats.availableProfiles} available`, icon: "Cpu" },
+    { label: "Open Tasks", value: String(hermes.stats.openTasks), hint: `${hermes.stats.runningTasks} running`, icon: "Target" },
+    { label: "Failed Jobs", value: String(hermes.stats.failedJobs), hint: "Cron attention", icon: "ShieldCheck" },
+    { label: "Channels", value: String(hermes.channels.filter((channel) => channel.available).length), hint: `${hermes.stats.missingPrivateChannels} private missing`, icon: "MessageSquare" },
   ];
 
   return (
     <div className="mx-auto max-w-[1320px]">
-      {/* ---- Hero Section ---- */}
-      <section
-        className="relative mb-4 overflow-hidden rounded-[14px] border p-[26px] backdrop-blur"
-        style={{
-          background: `
-            radial-gradient(520px 260px at 88% -30%, color-mix(in srgb, ${HERMES_ACCENT} 30%, transparent), transparent 70%),
-            radial-gradient(420px 300px at 6% 130%, color-mix(in srgb, ${HERMES_ACCENT} 16%, transparent), transparent 65%),
-            linear-gradient(140deg, rgba(168,85,247,0.1), rgba(17,19,25,0.7) 55%)
-          `,
-          borderColor: `color-mix(in srgb, ${HERMES_ACCENT} 30%, var(--color-line))`,
-          boxShadow: `var(--shadow-panel), 0 0 60px -30px color-mix(in srgb, ${HERMES_ACCENT} 60%, transparent)`,
-        }}
-      >
-        {/* Grain effect overlay */}
-        <div
-          className="absolute inset-0 pointer-events-none opacity-50"
-          style={{
-            backgroundImage: "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0)",
-            backgroundSize: "22px 22px",
-            maskImage: "linear-gradient(120deg, #000, transparent 60%)",
-          }}
-        />
-
-        <div className="relative">
-          {/* Hero Top */}
-          <div className="flex items-start gap-[18px] mb-[22px]">
-            {/* Orb */}
-            <div
-              className="relative flex size-16 shrink-0 items-center justify-center rounded-[19px] border"
+      <PageHeader
+        title="Hermes Command Center"
+        subtitle="Mission control for crew health, active jobs, and recent dispatch activity."
+        icon="HermesLogo"
+        accent="#a855f7"
+        right={(
+          <>
+            <Link
+              href="/agents/hermes"
+              className="inline-flex items-center gap-2 rounded-[10px] border border-line bg-surface-2 px-3 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface-3 hover:text-ink"
+            >
+              <Icon name="Cpu" size={14} />
+              Hermes
+            </Link>
+            <Link
+              href="/kanban"
+              className="inline-flex items-center gap-2 rounded-[10px] px-3 py-2 text-[13px] font-medium text-white"
               style={{
-                background: `linear-gradient(150deg, color-mix(in srgb, ${HERMES_ACCENT} 32%, transparent), color-mix(in srgb, ${HERMES_ACCENT} 10%, transparent))`,
-                borderColor: `color-mix(in srgb, ${HERMES_ACCENT} 45%, transparent)`,
-                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.14), 0 0 40px -10px color-mix(in srgb, ${HERMES_ACCENT} 70%, transparent)`,
+                background: "linear-gradient(150deg, #a855f7, #c084fc)",
+                boxShadow: "0 10px 26px -12px rgba(168,85,247,0.9), inset 0 1px 0 rgba(255,255,255,0.3)",
               }}
             >
-              <Icon name="HermesLogo" size={34} color={HERMES_ACCENT} />
-              <div
-                className="absolute -inset-1.5 rounded-[24px] border pointer-events-none animate-pulse"
-                style={{ borderColor: `color-mix(in srgb, ${HERMES_ACCENT} 30%, transparent)` }}
-              />
-            </div>
+              <Icon name="SquareKanban" size={14} />
+              Kanban
+            </Link>
+          </>
+        )}
+      />
 
-            {/* ID + Title */}
-            <div className="flex-1 min-w-0">
-              <div className="inline-flex items-center gap-[7px] text-[11px] font-semibold uppercase tracking-widest" style={{ color: "#c084fc" }}>
-                <span className="size-2 rounded-full" style={{ background: "#34d399" }} />
-                Command Center · Online
-              </div>
-              <h1 className="text-[30px] font-[680] -tracking-[0.03em] leading-none mt-1 mb-1">Hermes</h1>
-              <div className="text-[13px] text-[var(--color-ink-2)]">
-                Autonomous orchestration — commanding {hermes.crew.length} agents with {hermes.stats.runningTasks} tasks running.
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-[9px]">
-              <button className="inline-flex items-center gap-2 px-[13px] py-2 rounded-[10px] text-[13px] font-[550] border border-[var(--color-line-2)] text-[var(--color-ink-2)] bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] transition-colors">
-                <Icon name="Radio" size={14} />
-                <span>Crew</span>
-              </button>
-              <button
-                className="inline-flex items-center gap-2 px-[13px] py-2 rounded-[10px] text-[13px] font-[550] text-white transition-colors"
-                style={{
-                  background: `linear-gradient(150deg, ${HERMES_ACCENT}, #c084fc)`,
-                  boxShadow: `0 10px 26px -12px ${HERMES_ACCENT}, inset 0 1px 0 rgba(255,255,255,0.3)`,
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(1.07)")}
-                onMouseLeave={(e) => (e.currentTarget.style.filter = "brightness(1)")}
-              >
-                <Icon name="Workflow" size={14} />
-                <span>Dispatch task</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Metrics Grid */}
-          <div className="grid grid-cols-4 gap-3">
-            {metrics.map((m) => (
-              <div
-                key={m.label}
-                className="rounded-[11px] border p-[13px_15px] backdrop-blur"
-                style={{
-                  background: "rgba(10,11,15,0.5)",
-                  borderColor: "var(--color-line)",
-                }}
-              >
-                <div className="flex items-center gap-2 text-[var(--color-muted)]" style={{ color: HERMES_ACCENT }}>
-                  <Icon name={m.icon as any} size={15} />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">{m.label}</span>
-                </div>
-                <div className="text-[26px] font-[660] -tracking-[0.025em] leading-none mt-[9px] mb-[6px]">{m.value}</div>
-                <div className="text-[11.5px] text-[var(--color-faint)] min-h-[15px]">{m.hint}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ---- Main Grid: Orchestration + Crew/Dispatch ---- */}
-      <div className="grid grid-cols-[1.55fr_1fr] gap-4 items-start">
-        {/* Left: Orchestration + Missions */}
-        <div className="space-y-4">
-          {/* Orchestration */}
-          <div className="panel">
-            <div className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-[18px] py-3">
-              <div className="flex items-center gap-2">
-                <Icon name="Orbit" size={15} className="text-[var(--color-muted)]" />
-                <h3 className="text-[14px] font-semibold">Orchestration</h3>
-              </div>
-              <span className="inline-flex items-center gap-1.5 px-[9px] py-[3px_9px] rounded-full text-[11px] font-semibold" style={{ color: "#34d399", background: "color-mix(in srgb, #34d399 13%, transparent)" }}>
-                <span className="size-1.5 rounded-full animate-pulse" style={{ background: "#34d399" }} />
-                Dispatching
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <Card key={metric.label} className="p-4">
+            <div className="flex items-center gap-2 text-muted">
+              <span className="flex size-4 shrink-0 items-center justify-center text-[var(--accent)]">
+                <Icon name={metric.icon} size={16} />
               </span>
+              <span className="text-xs font-medium leading-none">{metric.label}</span>
             </div>
-            <div className="p-4 text-center text-[var(--color-muted)] text-[12px]">
-              <p>Orchestration graph visualization would render here</p>
-              <p className="text-[10px] mt-2 text-[var(--color-faint)]">(Requires SVG rendering from Hermes data)</p>
-            </div>
-          </div>
+            <div className="mt-2.5 text-3xl font-bold tracking-tight tabular-nums">{metric.value}</div>
+            <div className="mt-3 text-xs text-faint">{metric.hint}</div>
+          </Card>
+        ))}
+      </div>
 
-          {/* Missions */}
-          <div className="panel">
-            <div className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-[18px] py-3">
-              <div className="flex items-center gap-2">
-                <Icon name="Target" size={15} className="text-[var(--color-muted)]" />
-                <h3 className="text-[14px] font-semibold">Active missions</h3>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.3fr_0.9fr]">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>Gateway</CardTitle>
+                <p className="mt-1 text-xs text-faint">Current Hermes runtime and channel connectivity.</p>
               </div>
-              <a href="/kanban" className="inline-flex items-center gap-1 px-2 py-1 text-[12px] text-[var(--color-muted)] rounded-[7px] hover:bg-[var(--color-surface-hover)] hover:text-[var(--accent-2)]">
-                Board
-                <Icon name="ArrowRight" size={13} />
-              </a>
-            </div>
-            <div className="divide-y divide-[var(--color-line)]">
-              {hermes.jobs.slice(0, 3).map((j, idx) => (
-                <div key={idx} className="p-[14px_18px]">
-                  <div className="flex items-center gap-2 mb-[10px]">
-                    <Icon name="Target" size={15} color="#c084fc" />
-                    <span className="text-[13.5px] font-semibold flex-1">{j.name}</span>
-                    <span className="text-[12px] font-semibold text-[var(--color-ink-2)]">Active</span>
-                  </div>
-                  <div className="h-[5px] rounded-full bg-[var(--color-surface-3)] overflow-hidden mb-3">
-                    <div className="h-full rounded-full" style={{ width: "65%", background: `linear-gradient(90deg, var(--accent), var(--accent-2))` }} />
-                  </div>
-                  <div className="space-y-[2px] text-[12px]">
-                    <div className="flex items-center gap-2 py-[5px]">
-                      <div className="size-[18px] rounded-full border border-[var(--color-line-strong)] flex items-center justify-center text-[11px]" style={{ background: "#34d399", borderColor: "#34d399", color: "#04130c" }}>
-                        <Icon name="Check" size={11} />
+              <Badge tone={hermes.gateway.state === "running" ? "ok" : hermes.gateway.state === "stopped" ? "danger" : "muted"}>
+                {hermes.gateway.state}
+              </Badge>
+            </CardHeader>
+            <CardBody className="grid grid-cols-1 gap-3 pt-0 md:grid-cols-3">
+              <div className="rounded-xl border border-line bg-surface-2 p-3">
+                <div className="text-[11px] uppercase tracking-wider text-faint">Discord</div>
+                <div className="mt-2 text-sm font-semibold text-ink">{hermes.gateway.discord}</div>
+              </div>
+              <div className="rounded-xl border border-line bg-surface-2 p-3">
+                <div className="text-[11px] uppercase tracking-wider text-faint">Webhook</div>
+                <div className="mt-2 text-sm font-semibold text-ink">{hermes.gateway.webhook}</div>
+              </div>
+              <div className="rounded-xl border border-line bg-surface-2 p-3">
+                <div className="text-[11px] uppercase tracking-wider text-faint">Active Agents</div>
+                <div className="mt-2 text-sm font-semibold text-ink">{hermes.gateway.activeAgents}</div>
+              </div>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>Crew</CardTitle>
+                <p className="mt-1 text-xs text-faint">Profiles, private channels, and active task load.</p>
+              </div>
+              <Badge tone="violet">{hermes.activeProfile ?? "No active profile"}</Badge>
+            </CardHeader>
+            <CardBody className="pt-0">
+              <div className="divide-y divide-line">
+                {hermes.crew.map((profile) => (
+                  <div key={profile.id} className="flex items-start gap-3 py-3">
+                    <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-surface-2 text-[var(--accent)]">
+                      <Icon name={roleIcon(profile.role)} size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-ink">{profile.name}</span>
+                        <Badge tone={profileTone(profile.status)}>{profileLabel(profile.status)}</Badge>
                       </div>
-                      <span className="text-[var(--color-ink-2)]">{j.schedule || "manual"}</span>
-                      <span className="text-[10.5px] text-[var(--color-faint)] ml-auto">running</span>
+                      <div className="mt-1 text-xs text-faint">{profile.description}</div>
+                      <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted">
+                        <span>{profile.model}</span>
+                        <span>{profile.openTasks} open</span>
+                        <span>{profile.runningTasks} running</span>
+                        <span>{profile.privateChannel.available ? `#${profile.privateChannel.name}` : "private channel missing"}</span>
+                        {profile.lastActivity && <span>{profile.lastActivity}</span>}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Dispatch Activity</CardTitle>
+              <Link href="/logs" className="text-xs font-medium text-[var(--accent)] hover:underline">
+                View logs
+              </Link>
+            </CardHeader>
+            <CardBody className="pt-0">
+              <div className="divide-y divide-line">
+                {hermes.activity.slice(0, 8).map((entry) => (
+                  <div key={entry.id} className="flex items-start gap-3 py-3">
+                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-[var(--accent)]">
+                      <Icon name={entry.source === "cron" ? "Calendar" : entry.source === "kanban" ? "SquareKanban" : "Workflow"} size={14} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm text-ink">{entry.title}</div>
+                      {entry.summary && <div className="mt-1 line-clamp-2 text-xs text-faint">{entry.summary}</div>}
+                    </div>
+                    <div className="shrink-0 text-[11px] text-faint">{entry.when}</div>
+                  </div>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
         </div>
 
-        {/* Right: Crew + Dispatch Log */}
         <div className="space-y-4">
-          {/* Crew */}
-          <div className="panel">
-            <div className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-[18px] py-3">
-              <div className="flex items-center gap-2">
-                <Icon name="Cpu" size={15} className="text-[var(--color-muted)]" />
-                <h3 className="text-[14px] font-semibold">Crew</h3>
+          <Card>
+            <CardHeader>
+              <CardTitle>Active Jobs</CardTitle>
+              <Link href="/agents/hermes" className="text-xs font-medium text-[var(--accent)] hover:underline">
+                Hermes page
+              </Link>
+            </CardHeader>
+            <CardBody className="pt-0">
+              <div className="space-y-3">
+                {hermes.jobs.slice(0, 6).map((job) => (
+                  <div key={job.id} className="rounded-xl border border-line bg-surface-2 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-ink">{job.name}</div>
+                        <div className="mt-1 text-[11px] text-faint">{job.schedule ?? "Manual run"}</div>
+                      </div>
+                      <StatusBadge status={job.status} />
+                    </div>
+                    {job.lastError && <div className="mt-2 text-xs text-danger">{job.lastError}</div>}
+                  </div>
+                ))}
               </div>
-              <span className="text-[10px] font-semibold uppercase text-[var(--color-faint)] tracking-wider">{hermes.crew.length} commanded</span>
-            </div>
-            <div className="divide-y divide-[var(--color-line)]">
-              {hermes.crew.slice(0, 4).map((c) => {
-                const agent = AGENTS[c.id as keyof typeof AGENTS];
-                if (!agent) return null;
-                return (
-                  <a key={c.id} href={`/agents/${c.id}`} className="flex items-center gap-3 p-[13px_18px] hover:bg-[var(--color-surface-hover)] transition-colors" style={{ "--aa": agent.accent } as any}>
-                    <div className="size-[38px] rounded-[9px] flex items-center justify-center text-[12px] font-semibold shrink-0" style={{ background: agent.accent, color: "white" }}>
-                      {agent.name[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-semibold text-[var(--color-ink)]">{agent.name}</div>
-                      <div className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--color-faint)] mt-[2px]">{c.role}</div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1.5 text-right">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-semibold" style={{ color: agent.accent, background: `color-mix(in srgb, ${agent.accent} 13%, transparent)` }}>
-                        <span className="size-1.5 rounded-full animate-pulse" style={{ background: agent.accent }} />
-                        {c.status}
-                      </span>
-                      <span className="text-[10.5px] text-[var(--color-faint)]">dispatched {Math.floor(Math.random() * 20) + 1}</span>
-                    </div>
-                  </a>
-                );
-              })}
-            </div>
-          </div>
+            </CardBody>
+          </Card>
 
-          {/* Dispatch Log */}
-          <div className="panel">
-            <div className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-[18px] py-3">
-              <div className="flex items-center gap-2">
-                <Icon name="ArrowRightLeft" size={15} className="text-[var(--color-muted)]" />
-                <h3 className="text-[14px] font-semibold">Dispatch log</h3>
+          <Card>
+            <CardHeader>
+              <CardTitle>Attention</CardTitle>
+              <Badge tone={hermes.attention.length > 0 ? "warn" : "ok"}>
+                {hermes.attention.length === 0 ? "Clear" : `${hermes.attention.length} items`}
+              </Badge>
+            </CardHeader>
+            <CardBody className="pt-0">
+              {hermes.attention.length === 0 ? (
+                <div className="text-sm text-faint">No active attention items.</div>
+              ) : (
+                <ul className="space-y-2">
+                  {hermes.attention.slice(0, 8).map((item) => (
+                    <li key={item} className="rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm text-ink">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Documents</CardTitle>
+              <Badge tone="muted">{hermes.documents.length}</Badge>
+            </CardHeader>
+            <CardBody className="pt-0">
+              <div className="space-y-3">
+                {hermes.documents.slice(0, 6).map((doc) => (
+                  <div key={doc.id} className="rounded-xl border border-line bg-surface-2 p-3">
+                    <div className="text-sm font-semibold text-ink">{doc.title}</div>
+                    <div className="mt-1 text-[11px] text-faint">{doc.path}</div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted">
+                      <span>{doc.kind}</span>
+                      <span>{doc.updatedAt}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <span className="inline-flex items-center gap-1.5 px-[9px] py-[3px_9px] rounded-full text-[11px] font-semibold" style={{ color: "#34d399", background: "color-mix(in srgb, #34d399 13%, transparent)" }}>
-                <span className="size-1.5 rounded-full animate-pulse" style={{ background: "#34d399" }} />
-                Live
-              </span>
-            </div>
-            <div className="divide-y divide-[color-mix(in_srgb,var(--color-line)_60%,transparent)]">
-              {hermes.activity.slice(0, 6).map((a, idx) => (
-                <div key={idx} className="flex items-center gap-2.5 px-[18px] py-[9px] text-[12px]">
-                  <span className="flex items-center gap-2" style={{ color: "#a855f7" }}>
-                    <Icon name="Send" size={13} />
-                  </span>
-                  <span className="text-[var(--color-ink-2)] flex-1 truncate">{a.title || "Task dispatched"}</span>
-                  <span className="text-[10px] text-[var(--color-faint)] flex-none whitespace-nowrap">now</span>
-                </div>
-              ))}
-            </div>
-          </div>
+            </CardBody>
+          </Card>
         </div>
       </div>
     </div>
