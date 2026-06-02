@@ -28,9 +28,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const systemState = summarizeSystemState(agents);
 
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`} data-accent="iris" data-density="cozy">
       <body className="h-screen overflow-hidden">
-        <div className="grid h-screen" style={{ gridTemplateColumns: "auto 1fr" }}>
+        <div className="grid h-screen" style={{ gridTemplateColumns: "240px 1fr" }}>
           <Sidebar agentStatuses={agentStatuses} />
           <div className="flex min-w-0 flex-col" style={{ height: "100vh" }}>
             <TopBar
@@ -38,7 +38,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               systemState={systemState.state}
               systemLabel={systemState.label}
             />
-            <main className="flex-1 overflow-y-auto px-4 py-5 pb-14 sm:px-6 lg:px-8 lg:py-7">
+            <main className="flex-1 overflow-y-auto px-[22px] py-[22px] pb-14 sm:px-[22px] lg:px-[22px] lg:py-[22px]">
               <div className="mx-auto max-w-[1320px]">{children}</div>
             </main>
           </div>
