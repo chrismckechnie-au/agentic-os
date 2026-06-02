@@ -72,10 +72,12 @@ export function TopBar({
   notifications = [],
   systemState = "healthy",
   systemLabel = "System ready",
+  onToggleSidebar,
 }: {
   notifications?: ActivityItem[];
   systemState?: keyof typeof SYSTEM_STYLES;
   systemLabel?: string;
+  onToggleSidebar?: () => void;
 }) {
   const [open, setOpen] = useState<"org" | "bell" | "avatar" | null>(null);
   const [dismissedNotifications, setDismissedNotifications] = useState<string[]>(() => readDismissedNotifications());
@@ -92,7 +94,15 @@ export function TopBar({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-[52px] items-center gap-3 border-b border-[var(--color-line)] bg-[color-mix(in_srgb,var(--color-canvas)_78%,transparent)] px-[22px] backdrop-blur-[14px] [-webkit-backdrop-filter:blur(14px)] sm:gap-4 sm:px-[22px]">
+    <header className="sticky top-0 z-30 flex h-[52px] items-center gap-3 border-b border-[var(--color-line)] bg-[color-mix(in_srgb,var(--color-canvas)_78%,transparent)] px-[12px] backdrop-blur-[14px] [-webkit-backdrop-filter:blur(14px)] sm:gap-4 sm:px-[22px]">
+      {/* Mobile hamburger menu */}
+      <button
+        onClick={onToggleSidebar}
+        className="lg:hidden flex items-center justify-center size-[36px] rounded-[10px] border border-transparent hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+      >
+        <Icon name="Menu" size={16} />
+      </button>
+
       {/* Search (command palette deferred — input is inert for now) */}
       <label className="flex h-[32px] min-w-0 max-w-[280px] flex-1 items-center gap-2 rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface-2)] px-[11px] text-[13px] text-[var(--color-muted)] transition-colors hover:border-[var(--accent-line)] hover:bg-[var(--color-surface-3)] focus-within:border-[var(--accent-line)] focus-within:bg-[var(--color-surface-3)] sm:max-w-[280px]">
         <Icon name="Search" size={15} />

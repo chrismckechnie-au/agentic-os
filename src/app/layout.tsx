@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/topbar";
+import { MobileSidebarProvider } from "@/components/layout/mobile-sidebar-context";
+import { LayoutContent } from "@/components/layout/layout-content";
 import { summarizeSystemState } from "@/lib/agents/detect";
 import { getProvider } from "@/lib/providers";
 
@@ -31,31 +33,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`} data-accent="iris" data-density="cozy">
       <body className="h-screen overflow-hidden">
-        <div className="grid h-screen hidden lg:grid" style={{ gridTemplateColumns: "240px 1fr" }}>
-          <Sidebar agentStatuses={agentStatuses} />
-          <div className="flex min-w-0 flex-col" style={{ height: "100vh" }}>
-            <TopBar
-              notifications={notifications}
-              systemState={systemState.state}
-              systemLabel={systemState.label}
-            />
-            <main className="flex-1 overflow-y-auto px-[22px] py-[22px] pb-14 sm:px-[22px] lg:px-[22px] lg:py-[22px]">
-              <div className="mx-auto max-w-[1320px]">{children}</div>
-            </main>
-          </div>
-        </div>
-        <div className="grid h-screen lg:hidden">
-          <div className="flex min-w-0 flex-col" style={{ height: "100vh" }}>
-            <TopBar
-              notifications={notifications}
-              systemState={systemState.state}
-              systemLabel={systemState.label}
-            />
-            <main className="flex-1 overflow-y-auto px-[16px] py-[16px] pb-14">
-              <div className="mx-auto max-w-[1320px]">{children}</div>
-            </main>
-          </div>
-        </div>
+        <MobileSidebarProvider>
+          <LayoutContent agentStatuses={agentStatuses} notifications={notifications} systemState={systemState}>
+            {children}
+          </LayoutContent>
+        </MobileSidebarProvider>
       </body>
     </html>
   );
