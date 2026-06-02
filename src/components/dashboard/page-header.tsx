@@ -14,25 +14,26 @@ export function PageHeader({
   right?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 flex items-start justify-between gap-4">
-      <div className="flex items-center gap-3">
+    <div className="mb-[22px] flex items-start gap-4">
+      <div className="flex items-start gap-4 flex-1">
         {icon && (
           <span
-            className="grid size-11 place-items-center rounded-xl border border-line"
+            className="grid size-[42px] place-items-center rounded-[12px] border flex-none"
             style={{
-              color: accent ?? "var(--accent)",
-              background: "color-mix(in srgb, var(--accent) 12%, transparent)",
+              color: accent ?? "var(--color-accent-2)",
+              background: accent ? `color-mix(in srgb, ${accent} 18%, transparent)` : "var(--color-accent-soft)",
+              borderColor: accent ? `color-mix(in srgb, ${accent} 40%, transparent)` : "var(--color-accent-line)",
             }}
           >
-            <Icon name={icon} size={22} />
+            <Icon name={icon} size={21} />
           </span>
         )}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-          {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
+        <div className="flex-1">
+          <h1 className="text-[21px] font-[650] -tracking-[0.02em] m-0">{title}</h1>
+          {subtitle && <p className="text-[13px] text-[var(--color-muted)] mt-0.5 mb-0">{subtitle}</p>}
         </div>
       </div>
-      {right && <div className="flex items-center gap-2">{right}</div>}
+      {right && <div className="flex items-center gap-2 flex-none">{right}</div>}
     </div>
   );
 }
