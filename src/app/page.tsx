@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import { getHermesCrewDashboard } from "@/lib/providers";
-import { Icon } from "@/components/icon";
+import { Icon, type IconName } from "@/components/icon";
 import { HERMES_CREW_ROLE_LABELS } from "@/lib/config/hermes-crew";
 import type { HermesCrewRole } from "@/lib/types";
 
@@ -187,7 +188,7 @@ export default async function CommandCenterPage() {
                 }}
               >
                 <div className="flex items-center gap-2 text-[var(--color-muted)]" style={{ color: HERMES_ACCENT }}>
-                  <Icon name={m.icon as any} size={15} />
+                  <Icon name={m.icon as IconName} size={15} />
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">{m.label}</span>
                 </div>
                 <div className="text-[26px] font-[660] -tracking-[0.025em] leading-none mt-[9px] mb-[6px]">{m.value}</div>
@@ -366,7 +367,7 @@ export default async function CommandCenterPage() {
               {hermes.crew.slice(0, 5).map((c) => {
                 const accent = ROLE_ACCENT[c.role] ?? HERMES_ACCENT;
                 return (
-                  <a key={c.id} href="/agents/hermes" className="flex items-center gap-3 p-[13px_18px] hover:bg-[var(--color-surface-hover)] transition-colors">
+                  <Link key={c.id} href="/agents/hermes" className="flex items-center gap-3 p-[13px_18px] hover:bg-[var(--color-surface-hover)] transition-colors">
                     <div
                       className="size-[38px] rounded-[9px] flex items-center justify-center shrink-0"
                       style={{
@@ -388,7 +389,7 @@ export default async function CommandCenterPage() {
                       </span>
                       <span className="text-[10.5px] text-[var(--color-faint)]">{c.openTasks} open · {c.runningTasks} running</span>
                     </div>
-                  </a>
+                  </Link>
                 );
               })}
             </div>

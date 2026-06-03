@@ -17,6 +17,9 @@ function repoBadge(repo: Repo): string {
 
 export default async function ReposPage() {
   const repos = await getProvider().listRepos();
+  const privateCount = repos.filter((repo) => repo.private).length;
+  const activeAgents = repos.reduce((total, repo) => total + (repo.agents ?? 0), 0);
+  const githubLinked = repos.filter((repo) => repo.metadataSource === "github").length;
 
   return (
     <>
@@ -25,16 +28,23 @@ export default async function ReposPage() {
         subtitle="Repositories discovered from live agent workspaces, with GitHub metadata when available."
         icon="FolderGit2"
         right={
-          <label className="flex h-9 w-64 items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 text-sm">
+          <label className="control-input w-full md:w-72">
             <Icon name="Search" size={15} className="text-faint" />
-            <input placeholder="Find a repository..." className="w-full bg-transparent text-ink placeholder:text-faint focus:outline-none" />
+            <input placeholder="Find a repository..." className="text-sm" />
           </label>
         }
       />
 
+      <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <MetricTile label="Repositories" value={repos.length} icon="FolderGit2" />
+        <MetricTile label="GitHub linked" value={githubLinked} icon="Github" />
+        <MetricTile label="Private repos" value={privateCount} icon="Lock" />
+        <MetricTile label="Agents attached" value={activeAgents} icon="Orbit" />
+      </div>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {repos.map((r) => (
-          <Card key={r.id} className="flex flex-col p-5 transition-colors hover:border-line-strong">
+          <Card key={r.id} className="panel-hover flex flex-col p-5">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Icon name="FolderGit2" size={16} className="text-[var(--accent)]" />
@@ -97,5 +107,17 @@ export default async function ReposPage() {
         ))}
       </div>
     </>
+  );
+}
+
+function MetricTile({ label, value, icon }: { label: string; value: number; icon: string }) {
+  return (
+    <div className="tile px-4 py-3">
+      <div className="flex items-center gap-2 text-[var(--color-faint)]">
+        <Icon name={icon} size={14} className="text-[var(--accent)]" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider">{label}</span>
+      </div>
+      <div className="mt-3 text-[26px] font-[660] leading-none tabular-nums text-[var(--color-ink)]">{value}</div>
+    </div>
   );
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -12,11 +11,12 @@ type Item = { href: string; label: string; icon: string; accent?: string; dot?: 
 
 const MAIN: Item[] = [
   { href: "/", label: "Command Center", icon: "Orbit" },
-  { href: "/kanban", label: "Kanban", icon: "SquareKanban", badge: "12" },
+  { href: "/kanban", label: "Kanban", icon: "SquareKanban", badge: "Live" },
 ];
 
 const WORKSPACE: Item[] = [
-  { href: "/repos", label: "Repositories", icon: "FolderGit2", badge: "5" },
+  { href: "/repos", label: "Repositories", icon: "FolderGit2" },
+  { href: "/workspaces", label: "Workspaces", icon: "Boxes" },
 ];
 
 const ACTIVITY: Item[] = [
@@ -25,7 +25,7 @@ const ACTIVITY: Item[] = [
 ];
 
 const INTEGRATIONS: Item[] = [
-  { href: "/discord", label: "Discord", icon: "DiscordLogo", badge: "3" },
+  { href: "/discord", label: "Discord", icon: "DiscordLogo", badge: "Bridge" },
 ];
 
 const SYSTEM: Item[] = [{ href: "/settings", label: "Settings", icon: "Settings" }];
@@ -44,10 +44,21 @@ function dotColor(status: AgentStatus | undefined): string {
   return "bg-faint";
 }
 
-function NavLink({ item, active, agentStatus }: { item: Item; active: boolean; agentStatus?: AgentStatus }) {
+function NavLink({
+  item,
+  active,
+  agentStatus,
+  onNavigate,
+}: {
+  item: Item;
+  active: boolean;
+  agentStatus?: AgentStatus;
+  onNavigate?: () => void;
+}) {
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
       className={cn(
         "group relative flex items-center gap-[11px] rounded-[8px] px-[11px] py-2 text-[13.5px] font-medium transition-colors",
         active
@@ -89,11 +100,13 @@ function Section({
   items,
   isActive,
   agentStatuses,
+  onNavigate,
 }: {
   title?: string;
   items: Item[];
   isActive: (href: string) => boolean;
   agentStatuses?: Record<string, AgentStatus>;
+  onNavigate?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-[2px]">
@@ -108,6 +121,7 @@ function Section({
             item={it}
             active={isActive(it.href)}
             agentStatus={agentId ? agentStatuses?.[agentId] : undefined}
+            onNavigate={onNavigate}
           />
         );
       })}
@@ -115,7 +129,15 @@ function Section({
   );
 }
 
-export function Sidebar({ agentStatuses }: { agentStatuses?: Record<string, AgentStatus> }) {
+export function Sidebar({
+  agentStatuses,
+  mobile = false,
+  onNavigate,
+}: {
+  agentStatuses?: Record<string, AgentStatus>;
+  mobile?: boolean;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
 
   const isActive = (href: string) =>
@@ -123,31 +145,47 @@ export function Sidebar({ agentStatuses }: { agentStatuses?: Record<string, Agen
 
   return (
     <aside
-      className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r gap-[4px] px-3 py-4 border-[var(--color-line)] bg-gradient-to-b from-[rgba(255,255,255,0.02)] to-transparent bg-[var(--color-canvas-2)] overflow-y-auto min-[960px]:flex"
+      className={cn(
+        "w-60 shrink-0 flex-col gap-[4px] overflow-y-auto border-r border-[var(--color-line)] px-3 py-4",
+        mobile
+          ? "flex h-full bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0)_220px),var(--color-canvas-2)]"
+          : "sticky top-0 hidden h-screen bg-[linear-gradient(180deg,rgba(255,255,255,0.02),transparent),var(--color-canvas-2)] lg:flex",
+      )}
       style={{ width: "240px", padding: "16px 12px" }}
     >
       {/* Brand */}
-      <div className="flex items-center gap-[10px] pb-[6px] pt-2">
-        <span
-          className="grid size-8 place-items-center rounded-[9px] flex-none text-white"
-          style={{ background: "linear-gradient(150deg, var(--accent), var(--accent-2))", boxShadow: "0 6px 18px -8px var(--accent), inset 0 1px 0 rgba(255,255,255,0.4)" }}
-        >
-          <Icon name="Boxes" size={18} />
-        </span>
-        <div className="flex flex-col">
-          <span className="text-[14.5px] font-semibold tracking-tight">Agentic OS</span>
-          <span className="text-[10.5px] text-[var(--color-faint)]">Control plane</span>
+      <div className="rounded-[16px] border border-[var(--color-line)] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0)_120px),rgba(255,255,255,0.02)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+        <div className="flex items-center gap-[10px]">
+          <span
+            className="grid size-9 place-items-center rounded-[11px] flex-none text-white"
+            style={{ background: "linear-gradient(150deg, var(--accent), var(--accent-2))", boxShadow: "0 10px 22px -12px var(--accent), inset 0 1px 0 rgba(255,255,255,0.35)" }}
+          >
+            <Icon name="Boxes" size={18} />
+          </span>
+          <div className="flex flex-col">
+            <span className="text-[14.5px] font-semibold tracking-tight text-[var(--color-ink)]">Agentic OS</span>
+            <span className="text-[10.5px] text-[var(--color-faint)]">Unified control plane</span>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-ok/25 bg-ok/10 px-2 py-1 text-[10.5px] font-semibold text-ok">
+            <span className="size-1.5 rounded-full bg-ok" />
+            Live surfaces
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2 py-1 text-[10.5px] font-semibold text-faint">
+            Desktop + mobile
+          </span>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto space-y-1">
-        <Section items={MAIN} isActive={isActive} />
-        <Section title="Agents" items={AGENT_ITEMS} isActive={isActive} agentStatuses={agentStatuses} />
-        <Section title="Workspace" items={WORKSPACE} isActive={isActive} />
-        <Section title="Activity" items={ACTIVITY} isActive={isActive} />
-        <Section title="Integrations" items={INTEGRATIONS} isActive={isActive} />
-        <Section title="System" items={SYSTEM} isActive={isActive} />
+      <nav className="flex-1 overflow-y-auto space-y-1 pt-4">
+        <Section items={MAIN} isActive={isActive} onNavigate={onNavigate} />
+        <Section title="Agents" items={AGENT_ITEMS} isActive={isActive} agentStatuses={agentStatuses} onNavigate={onNavigate} />
+        <Section title="Workspace" items={WORKSPACE} isActive={isActive} onNavigate={onNavigate} />
+        <Section title="Activity" items={ACTIVITY} isActive={isActive} onNavigate={onNavigate} />
+        <Section title="Integrations" items={INTEGRATIONS} isActive={isActive} onNavigate={onNavigate} />
+        <Section title="System" items={SYSTEM} isActive={isActive} onNavigate={onNavigate} />
       </nav>
 
       {/* Footer: User chip */}

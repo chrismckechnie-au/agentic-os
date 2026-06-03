@@ -44,24 +44,27 @@ export function SessionList({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-2 pb-3">
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <div>
+          <div className="text-sm font-semibold text-ink">{title}</div>
+          <div className="mt-1 text-[11px] uppercase tracking-wider text-faint">{sessions.length} indexed</div>
+        </div>
         {onNew && (
           <button
             onClick={onNew}
-            className="grid size-7 place-items-center rounded-md border border-line bg-surface-2 text-muted transition-colors hover:text-ink"
+            className="grid size-8 place-items-center rounded-[10px] border border-line bg-surface-2 text-muted transition-colors hover:border-[var(--accent-line)] hover:text-[var(--accent)]"
           >
             <Icon name="Plus" size={15} />
           </button>
         )}
       </div>
 
-      <label className="mb-3 flex h-9 items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 text-sm">
+      <label className="control-input mb-3">
         <Icon name="Search" size={15} className="text-faint" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={searchPlaceholder}
-          className="w-full bg-transparent text-ink placeholder:text-faint focus:outline-none"
+          className="text-sm"
         />
       </label>
 
@@ -77,7 +80,7 @@ export function SessionList({
                     key={s.id}
                     onClick={() => { setSelected(s.id); onSelect?.(s.id); }}
                     className={cn(
-                      "w-full rounded-lg border px-3 py-2.5 text-left transition-colors",
+                      "w-full rounded-xl border px-3 py-3 text-left transition-colors",
                       on
                         ? "border-[var(--accent-line)] bg-[var(--accent-soft)]"
                         : "border-transparent hover:bg-surface-2/70",
@@ -176,13 +179,13 @@ export function ObsidianNoteList({
         </span>
       </div>
 
-      <label className="mb-2 flex h-9 items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 text-sm">
+      <label className="control-input mb-2">
         <Icon name="Search" size={15} className="text-faint" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search notes, paths, tags..."
-          className="w-full bg-transparent text-ink placeholder:text-faint focus:outline-none"
+          className="text-sm"
         />
       </label>
 
@@ -219,10 +222,10 @@ export function ObsidianNoteList({
           const tagsToShow = (note.tags ?? []).slice(0, 2);
           return (
             <button
-              key={note.id}
-              onClick={() => onSelect(note.id)}
-              className={cn(
-                "w-full rounded-lg border px-3 py-2.5 text-left transition-colors",
+            key={note.id}
+            onClick={() => onSelect(note.id)}
+            className={cn(
+                "w-full rounded-xl border px-3 py-3 text-left transition-colors",
                 active
                   ? "border-[var(--accent-line)] bg-[var(--accent-soft)]"
                   : "border-transparent hover:bg-surface-2/70",

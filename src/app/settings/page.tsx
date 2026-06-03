@@ -36,7 +36,7 @@ export default function SettingsPage() {
                   <div
                     key={opt.id}
                     className={cn(
-                      "rounded-xl border p-4",
+                      "rounded-xl border p-4 transition-colors",
                       active ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-line bg-surface-2",
                     )}
                   >
@@ -92,6 +92,26 @@ export default function SettingsPage() {
                 </li>
               ))}
             </ul>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Appearance</CardTitle>
+          </CardHeader>
+          <CardBody className="pt-0">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {[
+                { label: "Theme", value: "Midnight glass" },
+                { label: "Density", value: "Cozy" },
+                { label: "Navigation", value: "Responsive drawer" },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border border-line bg-surface-2 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-faint">{item.label}</div>
+                  <div className="mt-2 text-sm font-medium text-ink">{item.value}</div>
+                </div>
+              ))}
+            </div>
           </CardBody>
         </Card>
       </div>

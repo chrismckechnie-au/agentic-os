@@ -94,31 +94,36 @@ export function TopBar({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-[52px] items-center gap-3 border-b border-[var(--color-line)] bg-[color-mix(in_srgb,var(--color-canvas)_78%,transparent)] px-[12px] backdrop-blur-[14px] [-webkit-backdrop-filter:blur(14px)] sm:gap-4 sm:px-[22px]">
+    <header className="sticky top-0 z-30 flex h-[58px] items-center gap-3 border-b border-[var(--color-line)] bg-[linear-gradient(180deg,rgba(13,15,22,0.94),rgba(9,11,16,0.82))] px-[12px] backdrop-blur-[18px] [-webkit-backdrop-filter:blur(18px)] sm:gap-4 sm:px-[20px] xl:px-[24px]">
       {/* Mobile hamburger menu */}
       <button
         onClick={onToggleSidebar}
-        className="lg:hidden flex items-center justify-center size-[36px] rounded-[10px] border border-transparent hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+        className="lg:hidden flex items-center justify-center size-[38px] rounded-[11px] border border-[var(--color-line)] bg-[var(--color-surface-2)] text-[var(--color-muted)] hover:border-[var(--color-line-strong)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]"
       >
         <Icon name="Menu" size={16} />
       </button>
 
       {/* Search (command palette deferred — input is inert for now) */}
-      <label className="flex h-[32px] min-w-0 max-w-[280px] flex-1 items-center gap-2 rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface-2)] px-[11px] text-[13px] text-[var(--color-muted)] transition-colors hover:border-[var(--accent-line)] hover:bg-[var(--color-surface-3)] focus-within:border-[var(--accent-line)] focus-within:bg-[var(--color-surface-3)] sm:max-w-[280px]">
+      <label className="control-input h-[38px] min-w-0 max-w-[320px] flex-1 sm:max-w-[360px]">
         <Icon name="Search" size={15} />
         <input
           placeholder="Search sessions, repos, agents…"
-          className="w-full bg-transparent text-[var(--color-ink)] placeholder:text-[var(--color-faint)] focus:outline-none text-[13px]"
+          className="text-[13px]"
         />
-        <kbd className="hidden text-[10px] text-[var(--color-muted)] border border-[var(--color-line-2)] rounded-[5px] px-[5px] py-[1px] bg-[var(--color-canvas)] font-mono">⌘K</kbd>
+        <kbd className="hidden rounded-[6px] border border-[var(--color-line-2)] bg-[var(--color-canvas)] px-[5px] py-[1px] font-mono text-[10px] text-[var(--color-muted)] sm:inline">⌘K</kbd>
       </label>
 
       <div className="ml-auto flex shrink-0 items-center gap-[6px]">
+        <span className={`hidden items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold md:inline-flex ${systemStyle.className}`}>
+          <span className={`size-1.5 rounded-full ${systemStyle.dot}`} />
+          {systemLabel}
+        </span>
+
         {/* Notifications */}
         <div className="relative">
           <button
             onClick={() => toggle("bell")}
-            className="relative grid size-[36px] place-items-center rounded-[10px] border border-transparent bg-transparent text-[var(--color-muted)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)] hover:border-[var(--color-line)]"
+            className="relative grid size-[38px] place-items-center rounded-[11px] border border-[var(--color-line)] bg-[var(--color-surface-2)] text-[var(--color-muted)] transition-colors hover:border-[var(--color-line-strong)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]"
           >
             <Icon name="Bell" size={16} />
             {count > 0 && (
@@ -174,7 +179,7 @@ export function TopBar({
         </div>
 
         {/* New session button */}
-        <button className="flex items-center gap-2 rounded-[10px] border border-transparent bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-[13px] py-2 text-[13px] font-[550] text-white transition-colors hover:brightness-110 shadow-[0_8px_22px_-12px_var(--accent)_inset_0_1px_0_rgba(255,255,255,0.3)]">
+        <button className="accent-btn">
           <Icon name="Plus" size={15} />
           <span className="hidden sm:inline">New session</span>
         </button>

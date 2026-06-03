@@ -34,7 +34,7 @@ export function Tabs({
 
   return (
     <div className={className}>
-      <div role="tablist" className="flex items-center gap-1 border-b border-line px-1">
+      <div role="tablist" className="flex items-center gap-1 overflow-x-auto border-b border-line px-1 pb-1">
         {tabs.map((t) => {
           const on = t.id === active;
           return (
@@ -44,15 +44,17 @@ export function Tabs({
               aria-selected={on}
               onClick={() => setActive(t.id)}
               className={cn(
-                "relative flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors",
-                on ? "text-ink" : "text-faint hover:text-muted",
+                "relative flex shrink-0 items-center gap-1.5 rounded-[11px] px-3 py-2.5 text-sm font-medium transition-colors",
+                on
+                  ? "bg-[var(--accent-soft)] text-ink"
+                  : "text-faint hover:bg-surface-2/60 hover:text-muted",
               )}
             >
               {t.label}
               {typeof t.badge === "number" && (
                 <span className="rounded-full bg-surface-3 px-1.5 text-[10px] text-muted">{t.badge}</span>
               )}
-              {on && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-[var(--accent)]" />}
+              {on && <span className="absolute inset-x-2 -bottom-[5px] h-0.5 rounded-full bg-[var(--accent)]" />}
             </button>
           );
         })}
