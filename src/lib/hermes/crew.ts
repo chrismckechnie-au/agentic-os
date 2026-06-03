@@ -3,7 +3,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { buildHermesCrewDashboard, type CrewJobSource, type CrewProfileSource } from "./crew-core";
-import { crewActionsEnabled, readMissionControlAcks, readMissionControlEvents } from "./mission-control-db";
+import { crewActionsEnabled, readMissionControlActionHistory, readMissionControlAcks, readMissionControlEvents } from "./mission-control-db";
 import { hermesAvailable, readActiveProfile, resolveHermesHome } from "./paths";
 import { kanbanWritesEnabled } from "./kanban-write";
 import { readNotes } from "../obsidian/reader";
@@ -200,6 +200,7 @@ export function readHermesCrewDashboard(home = resolveHermesHome()): HermesCrewD
     notes: readNotes(160),
     loggedEvents: readMissionControlEvents(),
     ackedEventIds: readMissionControlAcks(),
+    actionHistory: readMissionControlActionHistory(),
     gateway: gateway ?? undefined,
     actions: {
       kanbanWritesEnabled: kanbanWritesEnabled(),

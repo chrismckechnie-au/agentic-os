@@ -123,7 +123,7 @@ function buildPanels(
     defaultId = extras.hermesCrew ? "crew" : "chat";
     panels.chat = terminalNode;
     panels.crew = extras.hermesCrew ? (
-      <HermesMissionControl dashboard={extras.hermesCrew} />
+      <HermesMissionControl dashboard={extras.hermesCrew} onOpenSession={extras.onOpenSession} />
     ) : (
       <Placeholder icon="Workflow" text="Hermes crew data is unavailable" />
     );

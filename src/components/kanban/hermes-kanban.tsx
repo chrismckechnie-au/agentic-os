@@ -45,6 +45,7 @@ export function HermesKanban({
   const [query, setQuery] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkNote, setBulkNote] = useState("");
   const fetching = useRef(false);
   const cursorRef = useRef<number>(initialBoard?.cursor ?? -1);
 
@@ -94,22 +95,22 @@ export function HermesKanban({
 
   // POST a mutation, surface the CLI message, then refresh board + open task.
   const mutate = useCallback(
-    async (url: string, body?: unknown): Promise<{ ok: boolean; message?: string }> => {
+    async (url: string, body?: unknown): Promise<{ ok: boolean; message?: string; detail?: string }> => {
       try {
         const res = await fetch(url, {
           method: "POST",
           headers: body ? { "content-type": "application/json" } : undefined,
           body: body ? JSON.stringify(body) : undefined,
         });
-        const data = (await res.json().catch(() => ({ ok: res.ok }))) as { ok?: boolean; message?: string };
+        const data = (await res.json().catch(() => ({ ok: res.ok }))) as { ok?: boolean; message?: string; detail?: string };
         const ok = data.ok ?? res.ok;
-        setToast({ ok, text: data.message || (ok ? "Done" : "Failed") });
+        setToast({ ok, text: [data.message || (ok ? "Done" : "Failed"), data.detail].filter(Boolean).join(" — ") });
         await loadBoard();
         setSelectedId((cur) => {
           if (cur) void loadDetail(cur);
           return cur;
         });
-        return { ok, message: data.message };
+        return { ok, message: data.message, detail: data.detail };
       } catch {
         setToast({ ok: false, text: "Request failed" });
         return { ok: false };
@@ -135,11 +136,14 @@ export function HermesKanban({
   const bulkAction = useCallback(
     async (action: string) => {
       const ids = [...selected];
-      if (ids.length === 0) return;
-      const r = await mutate("/api/hermes/kanban/bulk", { action, ids });
-      if (r.ok) setSelected(new Set());
+      if (ids.length === 0 || !bulkNote.trim()) return;
+      const r = await mutate("/api/hermes/kanban/bulk", { action, ids, note: bulkNote.trim() });
+      if (r.ok) {
+        setSelected(new Set());
+        setBulkNote("");
+      }
     },
-    [selected, mutate],
+    [selected, bulkNote, mutate],
   );
 
   // Initial load when not server-seeded (deferred a tick so the fetch's state
@@ -264,7 +268,7 @@ export function HermesKanban({
             )}
           >
             <Icon name={toast.ok ? "CircleCheck" : "CircleDot"} size={12} className="shrink-0" />
-            <span className="truncate">{toast.text}</span>
+            <span className="max-w-[32rem] whitespace-pre-wrap break-words">{toast.text}</span>
             <button onClick={() => setToast(null)} className="ml-0.5 shrink-0 opacity-70 hover:opacity-100" aria-label="Dismiss">
               <Icon name="X" size={11} />
             </button>
@@ -325,22 +329,33 @@ export function HermesKanban({
 
       {writesEnabled && selected.size > 0 && (
         <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-2 px-3 py-2 shadow-2xl">
-            <span className="text-xs font-medium text-muted">{selected.size} selected</span>
-            <span className="h-4 w-px bg-line" />
-            {BULK_ACTIONS.map((a) => (
-              <button
-                key={a.action}
-                onClick={() => void bulkAction(a.action)}
-                className={cn("rounded-md border px-2 py-1 text-xs font-medium", TONE_CLASS[a.tone])}
-              >
-                {a.label}
+          <div className="flex w-full max-w-4xl flex-col gap-2 rounded-xl border border-line bg-surface-2 px-3 py-3 shadow-2xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-muted">{selected.size} selected</span>
+              <span className="text-[11px] text-faint">Shared-note bulk transitions only run on compatible task selections.</span>
+              <button onClick={() => setSelected(new Set())} className="ml-auto rounded-md px-2 py-1 text-xs text-faint hover:text-ink">
+                Clear
               </button>
-            ))}
-            <span className="h-4 w-px bg-line" />
-            <button onClick={() => setSelected(new Set())} className="rounded-md px-2 py-1 text-xs text-faint hover:text-ink">
-              Clear
-            </button>
+            </div>
+            <textarea
+              value={bulkNote}
+              onChange={(event) => setBulkNote(event.target.value)}
+              rows={2}
+              placeholder="Required handoff/result note for the whole bulk transition…"
+              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink placeholder:text-faint focus:outline-none"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              {BULK_ACTIONS.map((a) => (
+                <button
+                  key={a.action}
+                  onClick={() => void bulkAction(a.action)}
+                  disabled={!bulkNote.trim()}
+                  className={cn("rounded-md border px-2 py-1 text-xs font-medium disabled:opacity-50", TONE_CLASS[a.tone])}
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -700,6 +715,7 @@ function TaskActions({
 }) {
   const [acting, setActing] = useState(false);
   const [assignee, setAssignee] = useState(detail.assignee ?? "");
+  const [handoffNote, setHandoffNote] = useState("");
   const [comment, setComment] = useState("");
 
   const act = async (body: unknown, after?: () => void) => {
@@ -716,13 +732,24 @@ function TaskActions({
 
   return (
     <Section title="Actions">
+      <div className="mb-3 space-y-1.5">
+        <label className="block text-[11px] font-medium uppercase tracking-wide text-faint">Required operator note</label>
+        <textarea
+          value={handoffNote}
+          onChange={(e) => setHandoffNote(e.target.value)}
+          rows={2}
+          placeholder="Reason, handoff context, or completion result for the next mutation…"
+          className="w-full resize-y rounded-md border border-line bg-surface-2 px-2 py-1.5 text-xs text-ink placeholder:text-faint focus:outline-none"
+        />
+      </div>
+
       {actions.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {actions.map((a) => (
             <button
               key={a.action}
-              disabled={acting}
-              onClick={() => act({ op: "transition", action: a.action })}
+              disabled={acting || !handoffNote.trim()}
+              onClick={() => act({ op: "transition", action: a.action, note: handoffNote.trim() }, () => setHandoffNote(""))}
               className={cn("rounded-md border px-2.5 py-1 text-xs font-medium disabled:opacity-50", TONE_CLASS[a.tone])}
             >
               {a.label}
@@ -739,16 +766,19 @@ function TaskActions({
           className="h-8 flex-1 rounded-md border border-line bg-surface-2 px-2 text-xs text-ink placeholder:text-faint focus:outline-none"
         />
         <button
-          disabled={acting || !assignee.trim()}
-          onClick={() => act({ op: "assign", profile: assignee.trim() })}
+          disabled={acting || !assignee.trim() || !handoffNote.trim()}
+          onClick={() => act({ op: "assign", profile: assignee.trim(), note: handoffNote.trim() }, () => setHandoffNote(""))}
           className="rounded-md border border-line bg-surface-2 px-2.5 py-1 text-xs font-medium text-muted hover:text-ink disabled:opacity-50"
         >
           Assign
         </button>
         {detail.assignee && (
           <button
-            disabled={acting}
-            onClick={() => act({ op: "assign", profile: null }, () => setAssignee(""))}
+            disabled={acting || !handoffNote.trim()}
+            onClick={() => act({ op: "assign", profile: null, note: handoffNote.trim() }, () => {
+              setAssignee("");
+              setHandoffNote("");
+            })}
             className="rounded-md border border-line px-2.5 py-1 text-xs text-faint hover:text-ink disabled:opacity-50"
           >
             Unassign

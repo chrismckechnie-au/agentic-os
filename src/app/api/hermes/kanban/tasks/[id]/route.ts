@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import type { HermesCrewActionKind, KanbanMutationResult } from "@/lib/types";
+import { recordMissionControlAction } from "@/lib/hermes/mission-control-db";
 import { readTaskDetail } from "@/lib/providers/live/hermes-kanban";
 import {
   addComment,
@@ -8,13 +10,21 @@ import {
   linkTasks,
   transition,
   type BridgeResult,
+  type TransitionAction,
 } from "@/lib/hermes/kanban-write";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// GET /api/hermes/kanban/tasks/:id — task drawer payload (comments, links,
-// runs, recent events). 404 when the task isn't on the active board.
+const TRANSITION_LABELS: Record<TransitionAction, string> = {
+  promote: "Promote task",
+  unblock: "Unblock task",
+  block: "Block task",
+  schedule: "Schedule task",
+  complete: "Complete task",
+  archive: "Archive task",
+};
+
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -28,49 +38,137 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 type Mutation =
   | { op: "comment"; text: string; author?: string }
-  | { op: "assign"; profile: string | null }
-  | { op: "transition"; action: string; reason?: string; result?: string }
+  | { op: "assign"; profile: string | null; note?: string; issueId?: string }
+  | { op: "transition"; action: string; note?: string; issueId?: string }
   | { op: "link" | "unlink"; otherId: string; direction: "depends-on" | "blocks" };
 
-// POST /api/hermes/kanban/tasks/:id — mutate a single task. Gated behind
-// AGENTIC_ENABLE_KANBAN_WRITES; returns { ok, message } from the hermes CLI.
+function response(result: KanbanMutationResult, status = result.ok ? 200 : 422) {
+  return NextResponse.json(result, { status });
+}
+
+function noteRequired(opLabel: string): KanbanMutationResult {
+  return {
+    ok: false,
+    message: `${opLabel} requires an operator note.`,
+    detail: "Add the handoff context so future operators can understand why this mutation happened.",
+    refreshHints: { board: false, dashboard: false },
+  };
+}
+
+function bridgeToMutationResult(message: string, result: BridgeResult): KanbanMutationResult {
+  return {
+    ok: result.ok,
+    message,
+    detail: result.message,
+    refreshHints: { board: true, dashboard: true },
+  };
+}
+
+function auditSingleTaskMutation(input: {
+  taskId: string;
+  actionKind: HermesCrewActionKind;
+  issueId?: string;
+  note?: string;
+  outcome: "success" | "failure";
+  summary: string;
+  detail?: string;
+  profile?: string;
+}) {
+  return recordMissionControlAction({
+    actionKind: input.actionKind,
+    targetKind: "task",
+    targetId: input.taskId,
+    issueId: input.issueId ?? `task:${input.taskId}`,
+    profile: input.profile,
+    outcome: input.outcome,
+    note: input.note,
+    summary: input.summary,
+    detail: input.detail,
+  });
+}
+
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!kanbanWritesEnabled()) {
-    return NextResponse.json({ ok: false, message: "Kanban writes are disabled" }, { status: 403 });
-  }
-  const { id } = await params;
-  const body = (await req.json().catch(() => null)) as Mutation | null;
-  if (!body || typeof body.op !== "string") {
-    return NextResponse.json({ ok: false, message: "Invalid request body" }, { status: 400 });
+    return response({ ok: false, message: "Kanban writes are disabled", refreshHints: { board: false, dashboard: false } }, 403);
   }
 
-  let result: BridgeResult;
+  const { id } = await params;
+  const task = readTaskDetail(id);
+  if (!task) {
+    return response({ ok: false, message: "Task not found", refreshHints: { board: false, dashboard: false } }, 404);
+  }
+
+  const body = (await req.json().catch(() => null)) as Mutation | null;
+  if (!body || typeof body.op !== "string") {
+    return response({ ok: false, message: "Invalid request body", refreshHints: { board: false, dashboard: false } }, 400);
+  }
+
+  let result: KanbanMutationResult;
+  let actionKind: HermesCrewActionKind | undefined;
+  let note: string | undefined;
+
   switch (body.op) {
-    case "comment":
-      result = await addComment(id, body.text ?? "", body.author);
+    case "comment": {
+      const bridge = await addComment(id, body.text ?? "", body.author);
+      result = bridgeToMutationResult(bridge.ok ? `Added comment to ${id}` : `Failed to add comment to ${id}`, bridge);
       break;
-    case "assign":
-      result = await assignTask(id, body.profile ?? null);
+    }
+    case "assign": {
+      note = body.note?.trim();
+      if (!note) return response(noteRequired("Task reassignment"), 400);
+      const normalizedProfile = typeof body.profile === "string" ? body.profile.trim() : body.profile;
+      actionKind = "reassign_task";
+      const bridge = await assignTask(id, normalizedProfile ?? null);
+      result = bridgeToMutationResult(
+        bridge.ok ? `Reassigned ${id}${normalizedProfile ? ` to ${normalizedProfile}` : " to the unassigned lane"}` : `Failed to reassign ${id}`,
+        bridge,
+      );
       break;
-    case "transition":
+    }
+    case "transition": {
       if (!isTransition(body.action)) {
-        return NextResponse.json({ ok: false, message: "Unknown action" }, { status: 400 });
+        return response({ ok: false, message: "Unknown action", refreshHints: { board: false, dashboard: false } }, 400);
       }
-      result = await transition(body.action, [id], { reason: body.reason, result: body.result });
+      note = body.note?.trim();
+      if (!note) return response(noteRequired(TRANSITION_LABELS[body.action]), 400);
+      actionKind = "change_task_status";
+      const bridge = await transition(body.action, [id], {
+        reason: body.action === "complete" ? undefined : note,
+        result: body.action === "complete" ? note : undefined,
+      });
+      result = bridgeToMutationResult(
+        bridge.ok ? `${TRANSITION_LABELS[body.action]} succeeded for ${id}` : `${TRANSITION_LABELS[body.action]} failed for ${id}`,
+        bridge,
+      );
       break;
+    }
     case "link":
     case "unlink": {
       const unlink = body.op === "unlink";
-      // depends-on: other is the parent (blocker) of this task; blocks: this is the parent.
-      result =
-        body.direction === "blocks"
-          ? await linkTasks(id, body.otherId, unlink)
-          : await linkTasks(body.otherId, id, unlink);
+      const bridge = body.direction === "blocks" ? await linkTasks(id, body.otherId, unlink) : await linkTasks(body.otherId, id, unlink);
+      result = bridgeToMutationResult(
+        bridge.ok ? `${unlink ? "Removed" : "Added"} ${body.direction} link for ${id}` : `Failed to update links for ${id}`,
+        bridge,
+      );
       break;
     }
     default:
-      return NextResponse.json({ ok: false, message: "Unknown op" }, { status: 400 });
+      return response({ ok: false, message: "Unknown op", refreshHints: { board: false, dashboard: false } }, 400);
   }
 
-  return NextResponse.json(result, { status: result.ok ? 200 : 422 });
+  if (actionKind) {
+    const audit = auditSingleTaskMutation({
+      taskId: id,
+      actionKind,
+      issueId: body.op === "assign" || body.op === "transition" ? body.issueId : undefined,
+      note,
+      outcome: result.ok ? "success" : "failure",
+      summary: result.message,
+      detail: result.detail,
+      profile: body.op === "assign" && typeof body.profile === "string" ? body.profile.trim() || undefined : task.assignee,
+    });
+    if (!audit.ok) result.detail = [result.detail, `Audit warning: ${audit.message}`].filter(Boolean).join("\n\n");
+  }
+
+  return response(result, result.ok ? 200 : 422);
 }

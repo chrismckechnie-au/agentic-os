@@ -179,11 +179,96 @@ export type HermesCrewRole = "orchestrator" | "engineering" | "incidents" | "soc
 
 export type HermesCrewProfileStatus = "running" | "online" | "attention" | "missing" | "idle";
 
+export type HermesCrewIssueSeverity = "critical" | "high" | "medium" | "low";
+
+export type HermesCrewIssueType = "task" | "cron" | "channel" | "profile" | "session" | "config" | "event";
+
+export type HermesCrewAffectedObjectKind = "task" | "cron" | "channel" | "profile" | "session" | "config" | "event";
+
+export type HermesCrewActionKind =
+  | "ack_event"
+  | "change_task_status"
+  | "reassign_task"
+  | "run_cron"
+  | "pause_cron"
+  | "resume_cron"
+  | "open_session"
+  | "inspect_config"
+  | "view_logs";
+
 export interface HermesCrewChannel {
   name: string;
   id?: string;
   kind: "public" | "private";
   available: boolean;
+}
+
+export interface HermesCrewRecommendedAction {
+  kind: HermesCrewActionKind;
+  label: string;
+  targetKind: HermesCrewAffectedObjectKind;
+  targetId?: string;
+  summary?: string;
+  noteRequired?: boolean;
+  destructive?: boolean;
+}
+
+export interface HermesCrewAffectedObject {
+  kind: HermesCrewAffectedObjectKind;
+  id: string;
+  label: string;
+  status?: string;
+  profile?: string;
+  role?: HermesCrewRole;
+  severity?: HermesCrewIssueSeverity;
+  summary?: string;
+  detail?: string;
+}
+
+export interface HermesCrewActionRecord {
+  id: string;
+  ts: string;
+  when: string;
+  actor: string;
+  profile?: string;
+  role?: HermesCrewRole;
+  issueId?: string;
+  requestId?: string;
+  actionKind: HermesCrewActionKind;
+  targetKind: HermesCrewAffectedObjectKind;
+  targetId: string;
+  outcome: "success" | "failure";
+  note?: string;
+  summary: string;
+  detail?: string;
+}
+
+export interface HermesCrewIssue {
+  id: string;
+  profile: string;
+  role: HermesCrewRole;
+  type: HermesCrewIssueType;
+  severity: HermesCrewIssueSeverity;
+  productionImpact: number;
+  rank: number;
+  title: string;
+  summary: string;
+  plainEnglish: string;
+  status?: string;
+  affectedObjects: HermesCrewAffectedObject[];
+  recommendedAction?: HermesCrewRecommendedAction;
+  rawDetail?: string;
+  latestActivity?: HermesCrewActivity;
+  recentActions: HermesCrewActionRecord[];
+}
+
+export interface HermesCrewScorecard {
+  openTasks: number;
+  runningTasks: number;
+  blockedTasks: number;
+  failedJobs: number;
+  missingPrivateChannel: boolean;
+  issueCount: number;
 }
 
 export interface HermesCrewProfile {
@@ -201,6 +286,13 @@ export interface HermesCrewProfile {
   openTasks: number;
   runningTasks: number;
   attentionCount: number;
+  issueCount: number;
+  prioritySummary: string;
+  topIssueId?: string;
+  topIssueTitle?: string;
+  scorecard: HermesCrewScorecard;
+  issues: HermesCrewIssue[];
+  recentActions: HermesCrewActionRecord[];
   privateChannel: HermesCrewChannel;
   publicChannels: HermesCrewChannel[];
   toolsets: string[];
@@ -254,7 +346,9 @@ export interface HermesCrewDashboard {
   crew: HermesCrewProfile[];
   channels: HermesCrewChannel[];
   jobs: HermesCrewJob[];
+  issues: HermesCrewIssue[];
   activity: HermesCrewActivity[];
+  actionHistory: HermesCrewActionRecord[];
   documents: HermesCrewDocument[];
   attention: string[];
   stats: {
@@ -264,6 +358,7 @@ export interface HermesCrewDashboard {
     runningTasks: number;
     failedJobs: number;
     missingPrivateChannels: number;
+    activeIssues: number;
   };
   actions: {
     kanbanWritesEnabled: boolean;
@@ -371,6 +466,21 @@ export interface KanbanBoard {
   stats: { active: number; running: number; blocked: number; review: number; done: number };
   /** Whether server-side Kanban writes are enabled (AGENTIC_ENABLE_KANBAN_WRITES). */
   writesEnabled: boolean;
+}
+
+export interface KanbanMutationResult {
+  ok: boolean;
+  /** Human-readable operator summary. Kept as `message` for compatibility with existing callers. */
+  message: string;
+  /** Optional raw detail from Hermes CLI or server-side validation. */
+  detail?: string;
+  /** Optional audit/action record ids created during the mutation. */
+  auditIds?: string[];
+  /** Hints for callers about which live surfaces should refresh. */
+  refreshHints?: {
+    board?: boolean;
+    dashboard?: boolean;
+  };
 }
 
 // --- Hermes sessions (chat history from the active profile's state.db) ---
