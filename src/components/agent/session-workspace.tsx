@@ -11,14 +11,13 @@ import { Terminal } from "@/components/agent/terminal";
 import { PtyTerminal } from "@/components/agent/pty-terminal";
 import { HermesMissionControl } from "@/components/hermes/mission-control";
 import {
-  ClaudeAside,
-  CodexAside,
   HermesAside,
   NoteViewer,
   ObsidianAside,
   ObsidianBacklinks,
   ObsidianGraph,
   ObsidianMetadata,
+  TerminalAgentAside,
 } from "@/components/agent/panels";
 import type {
   AgentId,
@@ -243,24 +242,31 @@ export function SessionWorkspace({
 
   const cardTitle = loading ? "Loading…" : live ? `Live · ${cfg.name}` : detail.title;
   const historyHref = `/sessions?agent=${agentId}`;
+  const showSessionRail = agentId === "hermes" || agentId === "obsidian";
+  const mainColumnClass =
+    expanded
+      ? showSessionRail ? "xl:col-span-9" : "xl:col-span-12"
+      : showSessionRail ? "xl:col-span-6" : "xl:col-span-9";
 
   return (
     <>
-      <div className="xl:col-span-3 max-h-[740px]">
-        {agentId === "obsidian" ? (
-          <ObsidianNoteList notes={notes ?? []} activeId={selectedId} onSelect={handleSelectSession} />
-        ) : (
-          <SessionList
-            sessions={initialSessions}
-            activeId={selectedId}
-            onSelect={handleSelectSession}
-            onNew={liveAgent ? startLive : undefined}
-            title="Recent Sessions"
-          />
-        )}
-      </div>
+      {showSessionRail && (
+        <div className="xl:col-span-3 max-h-[740px]">
+          {agentId === "obsidian" ? (
+            <ObsidianNoteList notes={notes ?? []} activeId={selectedId} onSelect={handleSelectSession} />
+          ) : (
+            <SessionList
+              sessions={initialSessions}
+              activeId={selectedId}
+              onSelect={handleSelectSession}
+              onNew={liveAgent ? startLive : undefined}
+              title="Recent Sessions"
+            />
+          )}
+        </div>
+      )}
 
-      <div className={expanded ? "xl:col-span-9" : "xl:col-span-6"}>
+      <div className={mainColumnClass}>
         <Card>
           <CardHeader className="flex-wrap items-start">
             <CardTitle>
@@ -380,8 +386,7 @@ export function SessionWorkspace({
 
       {!expanded && (
         <div className="space-y-6 xl:col-span-3">
-          {agentId === "claude-code" && <ClaudeAside s={detail} />}
-          {agentId === "codex" && <CodexAside s={detail} />}
+          {(agentId === "claude-code" || agentId === "codex") && <TerminalAgentAside s={detail} />}
           {agentId === "hermes" && hermesCrew && (
             <HermesMissionControl dashboard={hermesCrew} framed onOpenSession={resumeInChat} />
           )}

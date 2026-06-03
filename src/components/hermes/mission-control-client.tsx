@@ -574,24 +574,6 @@ export function HermesMissionControlClient({
           </div>
         </div>
       </div>
-
-      {liveDashboard.documents.length > 0 && (
-        <div className="mt-3 tile p-3">
-          <div className="mb-2 flex items-center gap-2">
-            <Icon name="BookOpen" size={14} className="text-[var(--accent)]" />
-            <span className="text-sm font-semibold text-ink">Obsidian Crew Library</span>
-          </div>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {liveDashboard.documents.slice(0, 6).map((doc) => (
-              <div key={doc.id} className="rounded-md border border-line bg-surface-2 px-2.5 py-2 text-xs">
-                <div className="truncate font-medium text-muted">{doc.title}</div>
-                <div className="mt-1 truncate font-mono text-faint">{doc.path}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {drawerOpen && selectedProfile && (
         <HermesWorkerDrawer
           profile={selectedProfile}

@@ -2,9 +2,8 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/icon";
 import { CopyButton } from "@/components/ui/copy-button";
-import { compact, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type {
-  Commit,
   FileTouched,
   Job,
   MemoryStore,
@@ -77,25 +76,21 @@ function memoryTotal(memory?: MemoryStore[]): string | null {
   return memory.map((store) => store.size).join(" + ");
 }
 
-function CommitList({ commits }: { commits: Commit[] }) {
+function EmptyCardMessage({ text }: { text: string }) {
   return (
-    <ul className="space-y-2.5">
-      {commits.map((c) => (
-        <li key={c.sha} className="flex items-start gap-2.5 text-sm">
-          <span className="mt-0.5 rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-[var(--accent)]">
-            {c.sha}
-          </span>
-          <span className="min-w-0 flex-1 text-muted">{c.message}</span>
-          <span className="shrink-0 text-xs text-faint">{c.when}</span>
-        </li>
-      ))}
-    </ul>
+    <p className="text-sm text-faint">{text}</p>
   );
 }
 
-function FileTypeChips({ files }: { files: FileTouched[] }) {
+function formatSandboxValue(s: SessionDetail): string | null {
+  if (!s.sandbox) return null;
+  if (s.workspace && s.sandbox === s.workspace) return null;
+  return s.sandbox;
+}
+
+function FileTypeSummary({ files }: { files: FileTouched[] }) {
   const counts = new Map<string, number>();
-  for (const f of files) counts.set(f.kind, (counts.get(f.kind) ?? 0) + 1);
+  for (const file of files) counts.set(file.kind, (counts.get(file.kind) ?? 0) + 1);
   return (
     <div className="flex flex-wrap gap-1.5">
       {[...counts.entries()].map(([kind, n]) => (
@@ -107,9 +102,14 @@ function FileTypeChips({ files }: { files: FileTouched[] }) {
   );
 }
 
-/* ------------------------------- Claude Code ------------------------------ */
+/* -------------------------- Claude + Codex shared ------------------------- */
 
-export function ClaudeAside({ s }: { s: SessionDetail }) {
+export function TerminalAgentAside({ s }: { s: SessionDetail }) {
+  const sandboxValue = formatSandboxValue(s);
+  const hasEnvironmentDetails = Boolean(
+    s.branch || s.model || sandboxValue || s.permissions || s.estimate,
+  );
+
   return (
     <div className="space-y-6">
       <Card>
@@ -125,113 +125,56 @@ export function ClaudeAside({ s }: { s: SessionDetail }) {
                 {s.workspace}
               </span>
             </DetailRow>
-            {s.branch && (
-              <DetailRow label="Branch">
-                <span className="inline-flex items-center gap-1.5">
-                  <Icon name="GitBranch" size={13} className="text-faint" />
-                  {s.branch}
-                </span>
-              </DetailRow>
-            )}
-            {s.model && <DetailRow label="Model">{s.model}</DetailRow>}
+            <DetailRow label="Status">{s.status}</DetailRow>
             {s.startedAt && <DetailRow label="Started">{s.startedAt}</DetailRow>}
           </div>
         </CardBody>
       </Card>
 
-      {s.totalTokens && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Usage</CardTitle>
-          </CardHeader>
-          <CardBody className="pt-0">
-            <div className="divide-y divide-line">
-              <DetailRow label="Tokens In">{compact(s.tokensIn ?? 0)}</DetailRow>
-              <DetailRow label="Tokens Out">{compact(s.tokensOut ?? 0)}</DetailRow>
-              <DetailRow label="Total Tokens">{compact(s.totalTokens)}</DetailRow>
-            </div>
-            {typeof s.contextPct === "number" && (
-              <div className="mt-3">
-                <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
-                  <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${s.contextPct}%` }} />
-                </div>
-                <p className="mt-1.5 text-xs text-faint">{s.contextPct}% of 1M context window</p>
-              </div>
-            )}
-          </CardBody>
-        </Card>
-      )}
-
-      {s.filesTouched && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Files Touched</CardTitle>
-            <span className="text-xs text-faint">{s.filesTouched.length} files</span>
-          </CardHeader>
-          <CardBody className="pt-0">
-            <FileTypeChips files={s.filesTouched} />
-          </CardBody>
-        </Card>
-      )}
-
-      {s.commits && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Commits</CardTitle>
-            <span className="text-xs text-[var(--accent)]">View all</span>
-          </CardHeader>
-          <CardBody className="pt-0">
-            <CommitList commits={s.commits} />
-          </CardBody>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-/* ---------------------------------- Codex --------------------------------- */
-
-export function CodexAside({ s }: { s: SessionDetail }) {
-  return (
-    <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Current Task Details</CardTitle>
+          <CardTitle>Files Touched</CardTitle>
+          <span className="text-xs text-faint">{s.filesTouched?.length ?? 0} files</span>
         </CardHeader>
         <CardBody className="pt-0">
-          <div className="divide-y divide-line">
-            <DetailRow label="Repository">{s.workspace}</DetailRow>
-            {s.branch && <DetailRow label="Branch">{s.branch}</DetailRow>}
-            {s.model && <DetailRow label="Model">{s.model}</DetailRow>}
-            {s.sandbox && <DetailRow label="Sandbox">{s.sandbox}</DetailRow>}
-            {s.permissions && <DetailRow label="Permissions">{s.permissions}</DetailRow>}
-            {s.startedAt && <DetailRow label="Started">{s.startedAt}</DetailRow>}
-            {s.estimate && (
-              <DetailRow label="Estimated">
-                <span className="text-[var(--accent)]">{s.estimate}</span>
-              </DetailRow>
-            )}
-          </div>
+          {s.filesTouched && s.filesTouched.length > 0 ? (
+            <div className="space-y-3">
+              <FileTypeSummary files={s.filesTouched} />
+              <ChangedFiles files={s.filesTouched} />
+            </div>
+          ) : (
+            <EmptyCardMessage text="No file activity has been recorded for this session." />
+          )}
         </CardBody>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Summary</CardTitle>
+          <CardTitle>Environment</CardTitle>
         </CardHeader>
-        <CardBody className="grid grid-cols-3 gap-2 pt-0 text-center">
-          <div className="rounded-lg border border-line bg-surface-2 py-3">
-            <div className="text-lg font-bold">{s.filesTouched?.length ?? 0}</div>
-            <div className="text-[11px] text-faint">Files</div>
-          </div>
-          <div className="rounded-lg border border-line bg-surface-2 py-3">
-            <div className="text-lg font-bold">—</div>
-            <div className="text-[11px] text-faint">Tests</div>
-          </div>
-          <div className="rounded-lg border border-line bg-surface-2 py-3">
-            <div className="text-lg font-bold">{s.commits?.length ?? 0}</div>
-            <div className="text-[11px] text-faint">Commits</div>
-          </div>
+        <CardBody className="pt-0">
+          {hasEnvironmentDetails ? (
+            <div className="divide-y divide-line">
+              {s.branch && (
+                <DetailRow label="Branch">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon name="GitBranch" size={13} className="text-faint" />
+                    {s.branch}
+                  </span>
+                </DetailRow>
+              )}
+              {s.model && <DetailRow label="Model">{s.model}</DetailRow>}
+              {sandboxValue && (
+                <DetailRow label="Sandbox">
+                  <span className="font-mono text-xs">{sandboxValue}</span>
+                </DetailRow>
+              )}
+              {s.permissions && <DetailRow label="Permissions">{s.permissions}</DetailRow>}
+              {s.estimate && <DetailRow label="Estimate">{s.estimate}</DetailRow>}
+            </div>
+          ) : (
+            <EmptyCardMessage text="No environment metadata has been recorded for this session." />
+          )}
         </CardBody>
       </Card>
     </div>

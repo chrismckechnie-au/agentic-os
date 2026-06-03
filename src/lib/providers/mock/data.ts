@@ -298,19 +298,51 @@ export const ACTIVE_SESSIONS: Record<AgentId, SessionDetail> = {
 
 // --- Per-agent stat cards ---------------------------------------------------
 
+const THIS_WEEK_GROUPS = new Set(["Today", "Yesterday", "Previous 7 days"]);
+
+function buildMockActivityStats(agentId: "claude-code" | "codex") : StatMetric[] {
+  const sessions = SESSIONS[agentId];
+  const active = sessions.filter((session) => session.status === "active" || session.status === "in_progress").length;
+  const today = sessions.filter((session) => session.group === "Today").length;
+  const thisWeek = sessions.filter((session) => THIS_WEEK_GROUPS.has(session.group ?? "")).length;
+  const workspaces = new Set(sessions.map((session) => session.workspace).filter((value): value is string => Boolean(value))).size;
+  const prefix = agentId === "claude-code" ? "cc" : "cx";
+
+  return [
+    {
+      id: `${prefix}-active`,
+      label: "Active Sessions",
+      value: String(active),
+      hint: `${sessions.length} total sessions`,
+      icon: "Activity",
+    },
+    {
+      id: `${prefix}-tasks`,
+      label: "Tasks Today",
+      value: String(today),
+      hint: `${thisWeek} sessions this week`,
+      icon: "ListChecks",
+    },
+    {
+      id: `${prefix}-week`,
+      label: "Sessions This Week",
+      value: String(thisWeek),
+      hint: "Today, yesterday, and the previous 7 days",
+      icon: "Clock",
+    },
+    {
+      id: `${prefix}-workspaces`,
+      label: "Workspaces Touched",
+      value: String(workspaces),
+      hint: "Distinct workspaces across indexed sessions",
+      icon: "FolderGit2",
+    },
+  ];
+}
+
 export const AGENT_STATS: Record<AgentId, StatMetric[]> = {
-  "claude-code": [
-    { id: "cc-active", label: "Active Sessions", value: "3", delta: "+1 from last hour", trend: "up", icon: "Activity", spark: [1, 2, 2, 3, 2, 3, 3] },
-    { id: "cc-tasks", label: "Tasks Today", value: "12", delta: "+4 from yesterday", trend: "up", icon: "ListChecks", spark: [4, 6, 7, 8, 10, 11, 12] },
-    { id: "cc-files", label: "Files Changed", value: "248", delta: "+86 from yesterday", trend: "up", icon: "FileText", spark: [120, 150, 170, 190, 210, 230, 248] },
-    { id: "cc-mcp", label: "MCP Connections", value: "8", hint: "All systems operational", icon: "Plug", spark: [8, 8, 7, 8, 8, 8, 8] },
-  ],
-  codex: [
-    { id: "cx-running", label: "Running Tasks", value: "3", hint: "2 in progress", icon: "CodeXml", spark: [1, 2, 3, 2, 3, 3, 3] },
-    { id: "cx-active", label: "Active Sessions", value: "12", delta: "+2 from last hour", trend: "up", icon: "LayoutGrid", spark: [7, 8, 9, 10, 11, 11, 12] },
-    { id: "cx-prs", label: "Pull Requests", value: "7", delta: "+3 from last 24h", trend: "up", icon: "GitPullRequest", spark: [3, 4, 4, 5, 6, 7, 7] },
-    { id: "cx-tests", label: "Test Pass Rate", value: "96.8%", delta: "+1.6% from last 24h", trend: "up", icon: "CircleCheck", spark: [94, 95, 95, 96, 96, 96.5, 96.8] },
-  ],
+  "claude-code": buildMockActivityStats("claude-code"),
+  codex: buildMockActivityStats("codex"),
   hermes: [
     { id: "hm-jobs", label: "Active Jobs", value: "7", hint: "4 running · 3 queued", icon: "Activity", spark: [3, 4, 5, 6, 6, 7, 7] },
     { id: "hm-memory", label: "Memory Size", value: "2.43 GB", delta: "+128 MB from last 24h", trend: "up", icon: "Database", spark: [2.0, 2.1, 2.2, 2.3, 2.35, 2.4, 2.43] },
