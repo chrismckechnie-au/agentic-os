@@ -38,12 +38,12 @@ export default async function AgentPage({
   searchParams,
 }: {
   params: Promise<{ agent: string }>;
-  searchParams: Promise<{ session?: string; new?: string }>;
+  searchParams: Promise<{ session?: string; new?: string; resume?: string }>;
 }) {
   const { agent } = await params;
   if (!isAgentId(agent)) notFound();
 
-  const { session: reqSession, new: isNew } = await searchParams;
+  const { session: reqSession, new: isNew, resume } = await searchParams;
   const data = await getProvider().getAgentPage(agent);
   const cfg = AGENTS[agent];
   let initialDetail: SessionDetail = data.activeSession;
@@ -83,6 +83,7 @@ export default async function AgentPage({
   const realData = agent !== "obsidian";
   const liveAgent = data.agent.liveCliAvailable;
   const autoStartLive = isNew === "1" && liveAgent;
+  const autoResumeId = resume === "1" && reqSession && liveAgent ? reqSession : undefined;
 
   return (
     <div style={accentStyle(cfg.accent)}>
@@ -103,8 +104,8 @@ export default async function AgentPage({
           realData={realData}
           liveAgent={liveAgent}
           autoStartLive={autoStartLive}
+          autoResumeId={autoResumeId}
           memory={data.memory}
-          skills={data.skills}
           jobs={data.jobs}
           notes={data.notes}
           vaultStats={vaultStats}

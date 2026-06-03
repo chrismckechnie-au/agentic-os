@@ -2,6 +2,7 @@ import type { AgentId, Note, VaultStats } from "@/lib/types";
 import type { AgentPageData, DataProvider, OverviewData } from "@/lib/providers/types";
 import { mockHermesCrewDashboard } from "@/lib/hermes/crew-core";
 import { prepareNotes } from "@/lib/obsidian/parse";
+import { filterNonCronSessions } from "@/lib/overview/session-filters";
 import {
   ACTIVE_SESSIONS,
   ACTIVITY,
@@ -73,7 +74,7 @@ export class MockProvider implements DataProvider {
     return {
       agent,
       stats: AGENT_STATS[id],
-      sessions: SESSIONS[id],
+      sessions: id === "hermes" ? filterNonCronSessions(SESSIONS[id]) : SESSIONS[id],
       activeSession: ACTIVE_SESSIONS[id],
       memory: id === "hermes" ? HERMES_MEMORY : undefined,
       skills: id === "hermes" ? HERMES_SKILLS : undefined,
@@ -85,8 +86,10 @@ export class MockProvider implements DataProvider {
   }
 
   async listSessions(agentId?: AgentId) {
-    if (agentId) return SESSIONS[agentId];
-    return (Object.keys(SESSIONS) as AgentId[]).flatMap((id) => SESSIONS[id]);
+    if (agentId) {
+      return agentId === "hermes" ? filterNonCronSessions(SESSIONS[agentId]) : SESSIONS[agentId];
+    }
+    return filterNonCronSessions((Object.keys(SESSIONS) as AgentId[]).flatMap((id) => SESSIONS[id]));
   }
 
   async listRepos() {

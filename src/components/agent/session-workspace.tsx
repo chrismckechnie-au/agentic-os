@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, type TabDef } from "@/components/ui/tabs";
@@ -9,20 +10,15 @@ import { ChatInput } from "@/components/agent/chat-input";
 import { Terminal } from "@/components/agent/terminal";
 import { PtyTerminal } from "@/components/agent/pty-terminal";
 import { HermesMissionControl } from "@/components/hermes/mission-control";
-import { HermesKanban } from "@/components/kanban/hermes-kanban";
-import { HermesSessions } from "@/components/agent/hermes-sessions";
 import {
-  ChangedFiles,
   ClaudeAside,
   CodexAside,
-  DetailRow,
   HermesAside,
   NoteViewer,
   ObsidianAside,
   ObsidianBacklinks,
   ObsidianGraph,
   ObsidianMetadata,
-  PlanList,
 } from "@/components/agent/panels";
 import type {
   AgentId,
@@ -32,7 +28,6 @@ import type {
   Note,
   Session,
   SessionDetail,
-  Skill,
   VaultStats,
 } from "@/lib/types";
 import type { AgentConfig } from "@/lib/config/agents";
@@ -49,137 +44,16 @@ function Placeholder({ icon, text }: { icon: string; text: string }) {
 function buildPanels(
   agentId: AgentId,
   cfg: AgentConfig,
-  detail: SessionDetail,
   terminalNode: React.ReactNode,
   extras: {
-    memory?: MemoryStore[];
-    skills?: Skill[];
-    jobs?: Job[];
     notes?: Note[];
     note?: Note;
     vaultStats?: VaultStats;
     onSelectNote?: (noteId: string) => void;
-    onResume?: (sessionId: string) => void;
-    onOpenSession?: (sessionId: string) => void;
-    hermesInfo?: { profile?: string; home?: string };
-    hermesCrew?: HermesCrewDashboard;
   },
 ): { tabs: TabDef[]; panels: Record<string, React.ReactNode>; defaultId: string } {
-  const panels: Record<string, React.ReactNode> = { terminal: terminalNode };
-  let defaultId = "terminal";
-
-  if (agentId === "claude-code") {
-    panels.files = detail.filesTouched ? (
-      <ChangedFiles files={detail.filesTouched} />
-    ) : (
-      <Placeholder icon="FileText" text="No files changed yet" />
-    );
-    panels.mcp = (
-      <ul className="space-y-1.5 text-sm">
-        {["filesystem", "github", "postgres", "playwright", "memory", "fetch", "sequential-thinking", "git"].map(
-          (m) => (
-            <li key={m} className="flex items-center justify-between rounded-md border border-line px-3 py-2">
-              <span className="flex items-center gap-2 font-mono text-muted">
-                <Icon name="Plug" size={13} className="text-[var(--accent)]" /> {m}
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-faint">
-                <span className="size-1.5 rounded-full bg-faint" /> unknown
-              </span>
-            </li>
-          ),
-        )}
-      </ul>
-    );
-    panels.settings = (
-      <div className="divide-y divide-line">
-        <DetailRow label="Model">{detail.model ?? "—"}</DetailRow>
-        <DetailRow label="Mode">Interactive</DetailRow>
-        <DetailRow label="Session path">{detail.sandbox ?? "—"}</DetailRow>
-        <DetailRow label="MCP Runtime">Not detected</DetailRow>
-      </div>
-    );
-  }
-
-  if (agentId === "codex") {
-    panels.plan = detail.plan ? (
-      <PlanList plan={detail.plan} />
-    ) : (
-      <Placeholder icon="ListChecks" text="No plan yet" />
-    );
-    panels.changes = detail.filesTouched ? (
-      <ChangedFiles files={detail.filesTouched} />
-    ) : (
-      <Placeholder icon="FileText" text="No changes" />
-    );
-    panels.tests = (
-      <div className="rounded-lg border border-line bg-surface-2 px-3 py-4 text-sm text-muted">
-        Test results are not collected from the live Codex transcripts on this host.
-      </div>
-    );
-    panels.logs = terminalNode;
-  }
-
-  if (agentId === "hermes") {
-    defaultId = extras.hermesCrew ? "crew" : "chat";
-    panels.chat = terminalNode;
-    panels.crew = extras.hermesCrew ? (
-      <HermesMissionControl dashboard={extras.hermesCrew} onOpenSession={extras.onOpenSession} />
-    ) : (
-      <Placeholder icon="Workflow" text="Hermes crew data is unavailable" />
-    );
-    panels.kanban = <HermesKanban onOpenSession={extras.onOpenSession} />;
-    panels.sessions = <HermesSessions onResume={extras.onResume} />;
-    panels.memory = extras.memory && extras.memory.length > 0 ? (
-      <div className="space-y-3">
-        {extras.memory.map((m) => (
-          <div key={m.label}>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted">{m.label}</span>
-              <span className="font-medium">{m.size}</span>
-            </div>
-            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-3">
-              <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${m.pct ?? 0}%` }} />
-            </div>
-          </div>
-        ))}
-      </div>
-    ) : (
-      <Placeholder icon="Database" text="No memory stores detected" />
-    );
-    panels.skills = extras.skills && extras.skills.length > 0 ? (
-      <ul className="divide-y divide-line text-sm">
-        {extras.skills.map((sk) => (
-          <li key={sk.name} className="flex items-center justify-between py-2">
-            <span className="font-mono text-muted">{sk.name}</span>
-            <span className={sk.status === "active" ? "text-ok" : "text-faint"}>{sk.status}</span>
-          </li>
-        ))}
-      </ul>
-    ) : (
-      <Placeholder icon="Sparkles" text="No skills detected" />
-    );
-    panels.jobs = extras.jobs && extras.jobs.length > 0 ? (
-      <ul className="divide-y divide-line text-sm">
-        {extras.jobs.map((j) => (
-          <li key={j.name} className="flex items-center justify-between py-2">
-            <span className="font-mono text-muted">{j.name}</span>
-            <span className="font-mono text-xs text-faint">{j.schedule ?? "—"}</span>
-          </li>
-        ))}
-      </ul>
-    ) : (
-      <Placeholder icon="Clock" text="No scheduled jobs" />
-    );
-    panels.settings = (
-      <div className="divide-y divide-line">
-        <DetailRow label="Active profile">{extras.hermesInfo?.profile ?? "default"}</DetailRow>
-        <DetailRow label="Model">{detail.model ?? "—"}</DetailRow>
-        <DetailRow label="Hermes home">
-          <span className="font-mono text-xs">{extras.hermesInfo?.home ?? "—"}</span>
-        </DetailRow>
-      </div>
-    );
-  }
+  const panels: Record<string, React.ReactNode> = { session: terminalNode };
+  let defaultId = "session";
 
   if (agentId === "obsidian") {
     defaultId = "notes";
@@ -207,11 +81,7 @@ function buildPanels(
     );
   }
 
-  const tabs: TabDef[] = cfg.tabs.map((t) =>
-    agentId === "codex" && t.id === "changes" ? { ...t, badge: detail.filesTouched?.length } : t,
-  );
-
-  return { tabs, panels, defaultId };
+  return { tabs: cfg.tabs, panels, defaultId };
 }
 
 export function SessionWorkspace({
@@ -222,8 +92,8 @@ export function SessionWorkspace({
   realData,
   liveAgent,
   autoStartLive,
+  autoResumeId,
   memory,
-  skills,
   jobs,
   notes,
   vaultStats,
@@ -240,8 +110,9 @@ export function SessionWorkspace({
   liveAgent: boolean;
   /** Open a live PTY session automatically on mount (e.g. ?new=1 from Overview). */
   autoStartLive?: boolean;
+  /** Resume a specific historical session automatically on mount. */
+  autoResumeId?: string;
   memory?: MemoryStore[];
-  skills?: Skill[];
   jobs?: Job[];
   notes?: Note[];
   vaultStats?: VaultStats;
@@ -277,19 +148,26 @@ export function SessionWorkspace({
       setResumeId(sessionId);
       setLiveKey((k) => k + 1);
       setLive(true);
-      setActiveTab("chat");
+      setActiveTab("session");
     },
     [liveAgent],
   );
 
-  // Auto-open a live session once when arriving via ?new=1.
+  // Auto-open a live session once when arriving via ?new=1 or a history resume link.
   const autoStarted = useRef(false);
   useEffect(() => {
+    if (autoResumeId && liveAgent && !autoStarted.current) {
+      autoStarted.current = true;
+      setResumeId(autoResumeId);
+      setLiveKey((k) => k + 1);
+      setLive(true);
+      return;
+    }
     if (autoStartLive && liveAgent && !autoStarted.current) {
       autoStarted.current = true;
       startLive();
     }
-  }, [autoStartLive, liveAgent, startLive]);
+  }, [autoResumeId, autoStartLive, liveAgent, startLive]);
 
   const handleSelectSession = useCallback(
     async (id: string) => {
@@ -356,21 +234,15 @@ export function SessionWorkspace({
   const selectedNote =
     agentId === "obsidian" ? notes?.find((n) => n.id === selectedId) ?? notes?.[0] : undefined;
 
-  const { tabs, panels, defaultId } = buildPanels(agentId, cfg, detail, terminalNode, {
-    memory,
-    skills,
-    jobs,
+  const { tabs, panels, defaultId } = buildPanels(agentId, cfg, terminalNode, {
     notes,
     note: selectedNote,
     vaultStats,
     onSelectNote: handleSelectSession,
-    onResume: resumeInChat,
-    onOpenSession: resumeInChat,
-    hermesInfo,
-    hermesCrew,
   });
 
   const cardTitle = loading ? "Loading…" : live ? `Live · ${cfg.name}` : detail.title;
+  const historyHref = `/sessions?agent=${agentId}`;
 
   return (
     <>
@@ -383,13 +255,14 @@ export function SessionWorkspace({
             activeId={selectedId}
             onSelect={handleSelectSession}
             onNew={liveAgent ? startLive : undefined}
+            title="Recent Sessions"
           />
         )}
       </div>
 
       <div className={expanded ? "xl:col-span-9" : "xl:col-span-6"}>
         <Card>
-          <CardHeader>
+          <CardHeader className="flex-wrap items-start">
             <CardTitle>
               <span className="flex min-w-0 items-center gap-2">
                 {loading ? (
@@ -409,13 +282,25 @@ export function SessionWorkspace({
                 )}
               </span>
             </CardTitle>
-            <div className="relative flex shrink-0 items-center gap-1 text-faint">
+            <div className="relative flex w-full flex-wrap items-center justify-end gap-1 text-faint sm:w-auto">
+              {agentId !== "obsidian" && (
+                <Link
+                  href={historyHref}
+                  className="flex items-center gap-1.5 rounded-md border border-line bg-surface-2 px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:border-[var(--accent-line)] hover:text-[var(--accent)]"
+                >
+                  <Icon name="MessageSquare" size={12} />
+                  <span className="hidden sm:inline">Previous Sessions</span>
+                  <span className="sm:hidden">History</span>
+                </Link>
+              )}
               {liveAgent && !live && (
                 <button
                   onClick={startLive}
                   className="flex items-center gap-1.5 rounded-md border border-[var(--accent-line)] bg-[var(--accent-soft)] px-2.5 py-1 text-xs font-medium text-[var(--accent)] transition-opacity hover:opacity-90"
                 >
-                  <Icon name="Play" size={12} /> Start live session
+                  <Icon name="Play" size={12} />
+                  <span className="hidden sm:inline">Start live session</span>
+                  <span className="sm:hidden">Start</span>
                 </button>
               )}
               {live && (
@@ -494,10 +379,13 @@ export function SessionWorkspace({
       </div>
 
       {!expanded && (
-        <div className="xl:col-span-3">
+        <div className="space-y-6 xl:col-span-3">
           {agentId === "claude-code" && <ClaudeAside s={detail} />}
           {agentId === "codex" && <CodexAside s={detail} />}
-          {agentId === "hermes" && <HermesAside memory={memory} skills={skills} jobs={jobs} />}
+          {agentId === "hermes" && hermesCrew && (
+            <HermesMissionControl dashboard={hermesCrew} framed onOpenSession={resumeInChat} />
+          )}
+          {agentId === "hermes" && <HermesAside memory={memory} jobs={jobs} s={detail} hermesInfo={hermesInfo} />}
           {agentId === "obsidian" && <ObsidianAside notes={notes} vaultStats={vaultStats} />}
         </div>
       )}

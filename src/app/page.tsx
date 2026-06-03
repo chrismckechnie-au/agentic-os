@@ -1,10 +1,11 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { getHermesCrewDashboard } from "@/lib/providers";
+import { getHermesCrewDashboard, getKanbanBoard } from "@/lib/providers";
 import { Icon, type IconName } from "@/components/icon";
 import { HERMES_CREW_ROLE_LABELS } from "@/lib/config/hermes-crew";
-import type { HermesCrewRole } from "@/lib/types";
+import { PRIORITY_META } from "@/lib/config/kanban";
+import type { HermesCrewActivity, HermesCrewProfile, HermesCrewRole, KanbanTask, TaskStatus } from "@/lib/types";
 
 // Hermes accent color (purple)
 const HERMES_ACCENT = "#a855f7";
@@ -43,6 +44,62 @@ function titleCase(value: string): string {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
 
+function normalizeProfileId(value: string | undefined): string | undefined {
+  return value?.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+const MISSION_STATUS_META: Record<TaskStatus, { label: string; tone: string; dot: string }> = {
+  triage: { label: "Triage", tone: "text-faint bg-surface-2 border-line", dot: "#6b7280" },
+  todo: { label: "To Do", tone: "text-muted bg-surface-2 border-line", dot: "#9aa1ad" },
+  scheduled: { label: "Scheduled", tone: "text-info bg-info/12 border-info/25", dot: "#60a5fa" },
+  ready: { label: "Ready", tone: "text-[var(--accent-2)] bg-[var(--accent-soft)] border-[var(--accent-line)]", dot: "#a78bfa" },
+  running: { label: "Running", tone: "text-ok bg-ok/12 border-ok/25", dot: "#34d399" },
+  blocked: { label: "Blocked", tone: "text-warn bg-warn/12 border-warn/25", dot: "#f59e0b" },
+  review: { label: "Review", tone: "text-[var(--accent-2)] bg-[var(--accent-soft)] border-[var(--accent-line)]", dot: "#c084fc" },
+  done: { label: "Done", tone: "text-ok bg-ok/12 border-ok/25", dot: "#10b981" },
+  archived: { label: "Archived", tone: "text-faint bg-surface-2 border-line", dot: "#5f6675" },
+};
+
+const ACTIVE_MISSION_ORDER: Record<TaskStatus, number> = {
+  running: 0,
+  blocked: 1,
+  review: 2,
+  ready: 3,
+  scheduled: 4,
+  todo: 5,
+  triage: 6,
+  done: 7,
+  archived: 8,
+};
+
+function workerForTask(task: KanbanTask, crew: HermesCrewProfile[]): HermesCrewProfile | undefined {
+  const normalized = normalizeProfileId(task.assignee);
+  if (!normalized) return undefined;
+  return crew.find((profile) => normalizeProfileId(profile.id) === normalized);
+}
+
+function missionSort(a: KanbanTask, b: KanbanTask): number {
+  const byStatus = ACTIVE_MISSION_ORDER[a.status] - ACTIVE_MISSION_ORDER[b.status];
+  if (byStatus !== 0) return byStatus;
+  const byPriority = (b.priority ?? 0) - (a.priority ?? 0);
+  if (byPriority !== 0) return byPriority;
+  return a.title.localeCompare(b.title);
+}
+
+const ACTIVITY_SOURCE_META: Record<HermesCrewActivity["source"], { label: string; icon: string; color: string }> = {
+  kanban: { label: "Kanban", icon: "SquareKanban", color: "#a855f7" },
+  cron: { label: "Cron", icon: "Calendar", color: "#60a5fa" },
+  gateway: { label: "Gateway", icon: "Plug", color: "#34d399" },
+  "mission-control": { label: "Mission Control", icon: "Workflow", color: "#f5b13d" },
+};
+
+function activityOwner(activity: HermesCrewActivity, crew: HermesCrewProfile[]): string | undefined {
+  const normalized = normalizeProfileId(activity.profile);
+  if (!normalized) return activity.role ? HERMES_CREW_ROLE_LABELS[activity.role] : undefined;
+  const profile = crew.find((entry) => normalizeProfileId(entry.id) === normalized);
+  return profile ? `${profile.name} · ${HERMES_CREW_ROLE_LABELS[profile.role]}` : activity.profile;
+}
+
 // Orchestration graph geometry (SVG user units; the <svg> scales to card width).
 const HUB_X = 235;
 const HUB_Y = 230;
@@ -76,11 +133,16 @@ function sparklePoints(cx: number, cy: number, outer: number, inner: number): st
 }
 
 export default async function CommandCenterPage() {
-  const hermes = await getHermesCrewDashboard();
+  const [hermes, board] = await Promise.all([getHermesCrewDashboard(), getKanbanBoard()]);
+
+  const activeMissions = board.tasks
+    .filter((task) => ["running", "blocked", "review", "ready", "scheduled"].includes(task.status))
+    .sort(missionSort)
+    .slice(0, 4);
 
   const metrics = [
     { icon: "Cpu", label: "Agents", value: hermes.crew.length, hint: "in crew" },
-    { icon: "Target", label: "Tasks", value: hermes.jobs.length, hint: "active" },
+    { icon: "Target", label: "Tasks", value: board.stats.active, hint: "on board" },
     { icon: "Zap", label: "Running", value: hermes.stats.runningTasks, hint: "this session" },
     { icon: "TrendingUp", label: "Uptime", value: "99.8%", hint: "system health" },
   ];
@@ -318,33 +380,125 @@ export default async function CommandCenterPage() {
                 <Icon name="Target" size={15} className="text-[var(--color-muted)]" />
                 <h3 className="text-[14px] font-semibold">Active missions</h3>
               </div>
-              <a href="/kanban" className="inline-flex items-center gap-1 px-2 py-1 text-[12px] text-[var(--color-muted)] rounded-[7px] hover:bg-[var(--color-surface-hover)] hover:text-[var(--accent-2)]">
-                Board
-                <Icon name="ArrowRight" size={13} />
-              </a>
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10.5px] font-semibold uppercase tracking-wider"
+                  style={{
+                    color: board.source === "live" ? "#34d399" : board.source === "degraded" ? "#f5b13d" : "var(--color-faint)",
+                    borderColor:
+                      board.source === "live"
+                        ? "color-mix(in srgb, #34d399 35%, transparent)"
+                        : board.source === "degraded"
+                          ? "color-mix(in srgb, #f5b13d 35%, transparent)"
+                          : "var(--color-line)",
+                    background:
+                      board.source === "live"
+                        ? "color-mix(in srgb, #34d399 12%, transparent)"
+                        : board.source === "degraded"
+                          ? "color-mix(in srgb, #f5b13d 12%, transparent)"
+                          : "var(--color-surface-2)",
+                  }}
+                >
+                  <span
+                    className={`size-1.5 rounded-full ${board.source === "live" ? "animate-pulse" : ""}`}
+                    style={{
+                      background:
+                        board.source === "live" ? "#34d399" : board.source === "degraded" ? "#f5b13d" : "#5f6675",
+                    }}
+                  />
+                  {board.source}
+                </span>
+                <Link href="/kanban" className="inline-flex items-center gap-1 rounded-[7px] px-2 py-1 text-[12px] text-[var(--color-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--accent-2)]">
+                  Board
+                  <Icon name="ArrowRight" size={13} />
+                </Link>
+              </div>
             </div>
             <div className="divide-y divide-[var(--color-line)]">
-              {hermes.jobs.slice(0, 3).map((j, idx) => (
-                <div key={idx} className="p-[14px_18px]">
-                  <div className="flex items-center gap-2 mb-[10px]">
-                    <Icon name="Target" size={15} color="#c084fc" />
-                    <span className="text-[13.5px] font-semibold flex-1">{j.name}</span>
-                    <span className="text-[12px] font-semibold text-[var(--color-ink-2)]">Active</span>
-                  </div>
-                  <div className="h-[5px] rounded-full bg-[var(--color-surface-3)] overflow-hidden mb-3">
-                    <div className="h-full rounded-full" style={{ width: "65%", background: `linear-gradient(90deg, var(--accent), var(--accent-2))` }} />
-                  </div>
-                  <div className="space-y-[2px] text-[12px]">
-                    <div className="flex items-center gap-2 py-[5px]">
-                      <div className="size-[18px] rounded-full border border-[var(--color-line-strong)] flex items-center justify-center text-[11px]" style={{ background: "#34d399", borderColor: "#34d399", color: "#04130c" }}>
-                        <Icon name="Check" size={11} />
+              {activeMissions.length === 0 && (
+                <div className="p-[18px] text-center text-[12px] text-[var(--color-muted)]">
+                  No running or queued kanban missions on the active board.
+                </div>
+              )}
+              {activeMissions.map((task) => {
+                const worker = workerForTask(task, hermes.crew);
+                const statusMeta = MISSION_STATUS_META[task.status];
+                const priorityMeta = PRIORITY_META[task.priority];
+                return (
+                  <div key={task.id} className="p-[14px_18px]">
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-[10px] border"
+                        style={{
+                          color: statusMeta.dot,
+                          background: `color-mix(in srgb, ${statusMeta.dot} 14%, transparent)`,
+                          borderColor: `color-mix(in srgb, ${statusMeta.dot} 30%, transparent)`,
+                        }}
+                      >
+                        <Icon name={task.status === "running" ? "Play" : task.status === "blocked" ? "CircleDot" : "SquareKanban"} size={15} />
                       </div>
-                      <span className="text-[var(--color-ink-2)]">{j.schedule || "manual"}</span>
-                      <span className="text-[10.5px] text-[var(--color-faint)] ml-auto">running</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-[13.5px] font-semibold text-[var(--color-ink)]">{task.title}</span>
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10.5px] font-semibold ${statusMeta.tone}`}>
+                            <span className="size-1.5 rounded-full" style={{ background: statusMeta.dot }} />
+                            {statusMeta.label}
+                          </span>
+                          {priorityMeta && (
+                            <span className={`rounded-full border px-2 py-1 text-[10.5px] font-semibold ${priorityMeta.className}`}>
+                              {priorityMeta.label}
+                            </span>
+                          )}
+                        </div>
+
+                        {task.body && <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-[var(--color-muted)]">{task.body}</p>}
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-faint)]">
+                          <span className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface-2)] px-2 py-1 font-mono">
+                            {task.id}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-2)] px-2 py-1">
+                            <span
+                              className="size-1.5 rounded-full"
+                              style={{ background: statusDot(worker?.status ?? "idle") }}
+                            />
+                            {worker ? `${worker.name} · ${HERMES_CREW_ROLE_LABELS[worker.role]}` : task.assignee ?? "Unassigned"}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-2)] px-2 py-1">
+                            <Icon name="Clock" size={12} />
+                            {task.runtime ?? task.startedAt ?? task.createdAt}
+                          </span>
+                          {typeof task.deps === "number" && task.deps > 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-2)] px-2 py-1">
+                              <Icon name="Link2" size={12} />
+                              {task.deps} deps
+                            </span>
+                          )}
+                          {task.branchName && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-2)] px-2 py-1">
+                              <Icon name="GitBranch" size={12} />
+                              {task.branchName}
+                            </span>
+                          )}
+                        </div>
+
+                        {task.skills && task.skills.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {task.skills.slice(0, 4).map((skill) => (
+                              <span
+                                key={skill}
+                                className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-muted)]"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -400,23 +554,81 @@ export default async function CommandCenterPage() {
             <div className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-[18px] py-3">
               <div className="flex items-center gap-2">
                 <Icon name="ArrowRightLeft" size={15} className="text-[var(--color-muted)]" />
-                <h3 className="text-[14px] font-semibold">Dispatch log</h3>
+                <h3 className="text-[14px] font-semibold">Dispatch flow</h3>
               </div>
-              <span className="inline-flex items-center gap-1.5 px-[9px] py-[3px_9px] rounded-full text-[11px] font-semibold" style={{ color: "#34d399", background: "color-mix(in srgb, #34d399 13%, transparent)" }}>
+              <span className="inline-flex items-center gap-1.5 rounded-full px-[9px] py-[3px_9px] text-[11px] font-semibold" style={{ color: "#34d399", background: "color-mix(in srgb, #34d399 13%, transparent)" }}>
                 <span className="size-1.5 rounded-full animate-pulse" style={{ background: "#34d399" }} />
                 Live
               </span>
             </div>
             <div className="divide-y divide-[color-mix(in_srgb,var(--color-line)_60%,transparent)]">
-              {hermes.activity.slice(0, 6).map((a, idx) => (
-                <div key={idx} className="flex items-center gap-2.5 px-[18px] py-[9px] text-[12px]">
-                  <span className="flex items-center gap-2" style={{ color: "#a855f7" }}>
-                    <Icon name="Send" size={13} />
-                  </span>
-                  <span className="text-[var(--color-ink-2)] flex-1 truncate">{a.title || "Task dispatched"}</span>
-                  <span className="text-[10px] text-[var(--color-faint)] flex-none whitespace-nowrap">now</span>
+              {hermes.activity.length === 0 && (
+                <div className="p-[18px] text-center text-[12px] text-[var(--color-muted)]">
+                  No active Hermes events are flowing through the dashboard right now.
                 </div>
-              ))}
+              )}
+              {hermes.activity.slice(0, 6).map((activity) => {
+                const sourceMeta = ACTIVITY_SOURCE_META[activity.source];
+                const owner = activityOwner(activity, hermes.crew);
+                return (
+                  <div key={activity.id} className="px-[18px] py-[12px]">
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[10px] border"
+                        style={{
+                          color: sourceMeta.color,
+                          background: `color-mix(in srgb, ${sourceMeta.color} 14%, transparent)`,
+                          borderColor: `color-mix(in srgb, ${sourceMeta.color} 30%, transparent)`,
+                        }}
+                      >
+                        <Icon name={sourceMeta.icon} size={14} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="truncate text-[12.5px] font-semibold text-[var(--color-ink-2)]">
+                            {activity.title || "Task dispatched"}
+                          </div>
+                          <span className="flex-none whitespace-nowrap text-[10.5px] text-[var(--color-faint)]">
+                            {activity.when || "—"}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[10.5px]">
+                          <span
+                            className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 font-semibold"
+                            style={{
+                              color: sourceMeta.color,
+                              borderColor: `color-mix(in srgb, ${sourceMeta.color} 30%, transparent)`,
+                              background: `color-mix(in srgb, ${sourceMeta.color} 12%, transparent)`,
+                            }}
+                          >
+                            <span className="size-1.5 rounded-full" style={{ background: sourceMeta.color }} />
+                            {sourceMeta.label}
+                          </span>
+                          {activity.status && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-2)] px-2 py-1 font-semibold text-[var(--color-muted)]">
+                              <span className="size-1.5 rounded-full" style={{ background: statusDot(activity.status) }} />
+                              {titleCase(activity.status)}
+                            </span>
+                          )}
+                          {owner && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-2)] px-2 py-1 text-[var(--color-faint)]">
+                              <Icon name="User" size={11} />
+                              {owner}
+                            </span>
+                          )}
+                        </div>
+
+                        {activity.summary && (
+                          <p className="mt-2 line-clamp-2 text-[11.5px] leading-5 text-[var(--color-muted)]">
+                            {activity.summary}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

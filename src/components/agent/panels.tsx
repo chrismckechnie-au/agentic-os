@@ -11,7 +11,6 @@ import type {
   Note,
   NoteLink,
   SessionDetail,
-  Skill,
   VaultStats,
 } from "@/lib/types";
 
@@ -243,15 +242,32 @@ export function CodexAside({ s }: { s: SessionDetail }) {
 
 export function HermesAside({
   memory,
-  skills,
   jobs,
+  s,
+  hermesInfo,
 }: {
   memory?: MemoryStore[];
-  skills?: Skill[];
   jobs?: Job[];
+  s: SessionDetail;
+  hermesInfo?: { profile?: string; home?: string };
 }) {
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Workspace</CardTitle>
+        </CardHeader>
+        <CardBody className="pt-0">
+          <div className="divide-y divide-line">
+            <DetailRow label="Active profile">{hermesInfo?.profile ?? "default"}</DetailRow>
+            {s.model && <DetailRow label="Model">{s.model}</DetailRow>}
+            <DetailRow label="Hermes home">
+              <span className="font-mono text-xs">{hermesInfo?.home ?? "—"}</span>
+            </DetailRow>
+          </div>
+        </CardBody>
+      </Card>
+
       {memory && (
         <Card>
           <CardHeader>
@@ -274,29 +290,10 @@ export function HermesAside({
         </Card>
       )}
 
-      {skills && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Skills</CardTitle>
-            <span className="text-xs text-faint">{skills.filter((skill) => skill.status === "active").length} active</span>
-          </CardHeader>
-          <CardBody className="pt-0">
-            <ul className="divide-y divide-line">
-              {skills.map((sk) => (
-                <li key={sk.name} className="flex items-center justify-between py-2 text-sm">
-                  <span className="font-mono text-muted">{sk.name}</span>
-                  <Badge tone={sk.status === "active" ? "ok" : "muted"}>{sk.status}</Badge>
-                </li>
-              ))}
-            </ul>
-          </CardBody>
-        </Card>
-      )}
-
       {jobs && (
         <Card>
           <CardHeader>
-            <CardTitle>Jobs</CardTitle>
+            <CardTitle>Cron Jobs</CardTitle>
             <span className="text-xs text-faint">{jobs.length} total</span>
           </CardHeader>
           <CardBody className="pt-0">

@@ -31,7 +31,7 @@ export async function GET(req: Request) {
       });
     }
 
-    const { rows, total } = readSessionRows({ limit: safeLimit, offset: safeOffset, query: q });
+    const { rows, total } = readSessionRows({ limit: safeLimit, offset: safeOffset, query: q, excludeCron: true });
     return NextResponse.json({
       sessions: rows,
       total,

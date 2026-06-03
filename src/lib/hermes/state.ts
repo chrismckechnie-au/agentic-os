@@ -197,20 +197,19 @@ export function latestDescendant(id: string, dbPath = resolveStateDb()): string 
  * (optionally filtered) result set so the UI can paginate.
  */
 export function readSessionRows(
-  opts: { limit?: number; offset?: number; query?: string } = {},
+  opts: { limit?: number; offset?: number; query?: string; excludeCron?: boolean } = {},
   dbPath = resolveStateDb(),
 ): { rows: HermesSessionRow[]; total: number } {
   const limit = Math.min(Math.max(opts.limit ?? 40, 1), 200);
   const offset = Math.max(0, opts.offset ?? 0);
   const query = opts.query?.trim();
+  const excludeCron = opts.excludeCron === true;
 
   const db = tryOpenDb(dbPath);
   if (!db) return { rows: [], total: 0 };
   try {
-    let where = "";
+    const filters: string[] = [];
     const filterParams: string[] = [];
-    let total: number;
-
     if (query) {
       const match = ftsQuery(query);
       let ids: string[] = [];
@@ -231,12 +230,26 @@ export function readSessionRows(
       if (ids.length === 0) return { rows: [], total: 0 };
       // SQLite caps bound variables; cap the IN list and report a bounded total.
       const capped = ids.slice(0, 900);
-      where = `WHERE s.id IN (${capped.map(() => "?").join(",")})`;
+      filters.push(`s.id IN (${capped.map(() => "?").join(",")})`);
       filterParams.push(...capped);
-      total = capped.length;
-    } else {
-      total = Number((db.prepare("SELECT COUNT(*) AS n FROM sessions").get() as DbRow).n ?? 0);
     }
+
+    if (excludeCron) {
+      filters.push(
+        `NOT (
+          lower(trim(COALESCE(s.source, ''))) LIKE 'cron%' OR
+          lower(trim(COALESCE(s.id, ''))) GLOB 'cron_*' OR
+          lower(trim(COALESCE(s.title, ''))) GLOB 'conversation cron_*'
+        )`,
+      );
+    }
+
+    const where = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
+    const total = Number(
+      (
+        db.prepare(`SELECT COUNT(*) AS n FROM sessions s ${where}`).get(...filterParams) as DbRow
+      ).n ?? 0,
+    );
 
     const rows = db
       .prepare(

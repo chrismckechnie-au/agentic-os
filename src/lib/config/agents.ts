@@ -34,12 +34,7 @@ export const AGENTS: Record<AgentId, AgentConfig> = {
     accent: "#e8682c",
     icon: "ClaudeLogo",
     liveCli: { bin: "claude" },
-    tabs: [
-      { id: "terminal", label: "Terminal" },
-      { id: "files", label: "Files" },
-      { id: "mcp", label: "MCP Tools" },
-      { id: "settings", label: "Settings" },
-    ],
+    tabs: [{ id: "session", label: "Session" }],
   },
   codex: {
     id: "codex",
@@ -48,13 +43,7 @@ export const AGENTS: Record<AgentId, AgentConfig> = {
     accent: "#10b981",
     icon: "OpenAILogo",
     liveCli: { bin: "codex" },
-    tabs: [
-      { id: "terminal", label: "Terminal" },
-      { id: "plan", label: "Plan" },
-      { id: "changes", label: "Changes" },
-      { id: "tests", label: "Tests" },
-      { id: "logs", label: "Logs" },
-    ],
+    tabs: [{ id: "session", label: "Session" }],
   },
   hermes: {
     id: "hermes",
@@ -63,16 +52,7 @@ export const AGENTS: Record<AgentId, AgentConfig> = {
     accent: "#a855f7",
     icon: "HermesLogo",
     liveCli: { bin: "hermes" },
-    tabs: [
-      { id: "chat", label: "Chat" },
-      { id: "crew", label: "Crew" },
-      { id: "kanban", label: "Kanban" },
-      { id: "sessions", label: "Sessions" },
-      { id: "memory", label: "Memory" },
-      { id: "skills", label: "Skills" },
-      { id: "jobs", label: "Jobs" },
-      { id: "settings", label: "Settings" },
-    ],
+    tabs: [{ id: "session", label: "Session" }],
   },
   obsidian: {
     id: "obsidian",

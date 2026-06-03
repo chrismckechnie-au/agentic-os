@@ -104,7 +104,7 @@ export class LiveProvider implements DataProvider {
 
     if (id === "hermes") {
       const health = getStateDbHealth();
-      const sessions = health.readable ? snapshot.hermes.slice(0, 100) : [];
+      const sessions = health.readable ? filterNonCronSessions(snapshot.hermes).slice(0, 100) : [];
       const stats = buildHermesStats();
       return {
         agent,
@@ -144,13 +144,13 @@ export class LiveProvider implements DataProvider {
     if (agentId === "codex") return snapshot.codex.map(toBaseSession);
     if (agentId === "hermes") {
       const health = getStateDbHealth();
-      return health.readable ? snapshot.hermes : [];
+      return health.readable ? filterNonCronSessions(snapshot.hermes) : [];
     }
     if (agentId === "obsidian") {
       return snapshot.obsidian;
     }
 
-    return snapshot.all;
+    return filterNonCronSessions(snapshot.all);
   }
 
   async listRepos() {
