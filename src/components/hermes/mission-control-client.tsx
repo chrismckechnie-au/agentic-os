@@ -423,7 +423,7 @@ export function HermesMissionControlClient({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
         <div className="tile px-3 py-2">
           <div className="text-lg font-semibold text-ink">{liveDashboard.stats.openTasks}</div>
           <div className="text-[11px] text-faint">open tasks</div>
@@ -506,8 +506,8 @@ export function HermesMissionControlClient({
         </div>
       )}
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-5">
-        <div className="grid gap-3 lg:col-span-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,2.4fr)_minmax(320px,1fr)]">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
           {liveDashboard.crew.map((profile) => (
             <HermesWorkerCard
               key={profile.id}
@@ -526,10 +526,10 @@ export function HermesMissionControlClient({
           ))}
         </div>
 
-        <div className="space-y-3 lg:col-span-2">
+        <div className="min-w-0 space-y-3">
           {selectedProfile && (
-            <div className="tile p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="tile min-w-0 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-ink">Selected worker</span>
                 <button
                   type="button"
@@ -544,21 +544,21 @@ export function HermesMissionControlClient({
                   Open drawer
                 </button>
               </div>
-              <div className="rounded-md border border-line bg-surface-2 px-3 py-2 text-xs">
+              <div className="min-w-0 rounded-md border border-line bg-surface-2 px-3 py-2 text-xs">
                 <div className="font-medium text-muted">{selectedProfile.name}</div>
-                <div className="mt-1 text-faint">{selectedProfile.prioritySummary}</div>
+                <div className="mt-1 break-words text-faint">{selectedProfile.prioritySummary}</div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   <Badge tone={toneFor(selectedProfile.status)}>{selectedProfile.status}</Badge>
                   <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-faint">{selectedProfile.issueCount} issues</span>
                   <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-faint">{selectedProfile.runningTasks} running</span>
                 </div>
-                {selectedIssueSummary && <div className="mt-2 text-faint">Focused issue: {selectedIssueSummary.title}</div>}
+                {selectedIssueSummary && <div className="mt-2 break-words text-faint">Focused issue: {selectedIssueSummary.title}</div>}
               </div>
             </div>
           )}
 
-          <div className="tile p-3">
-            <div className="mb-2 flex items-center justify-between">
+          <div className="tile min-w-0 p-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-semibold text-ink">Automation</span>
               <Link href="/agents/hermes" className="flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline">
                 Hermes <Icon name="ArrowRight" size={12} />

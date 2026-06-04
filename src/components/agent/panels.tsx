@@ -188,14 +188,19 @@ export function HermesAside({
   jobs,
   s,
   hermesInfo,
+  layout = "stack",
 }: {
   memory?: MemoryStore[];
   jobs?: Job[];
   s: SessionDetail;
   hermesInfo?: { profile?: string; home?: string };
+  layout?: "stack" | "grid";
 }) {
+  const rootClass =
+    layout === "grid" ? "grid gap-6 md:grid-cols-2 xl:grid-cols-3" : "space-y-6";
+
   return (
-    <div className="space-y-6">
+    <div className={rootClass}>
       <Card>
         <CardHeader>
           <CardTitle>Workspace</CardTitle>

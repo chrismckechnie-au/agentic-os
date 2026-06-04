@@ -243,8 +243,11 @@ export function SessionWorkspace({
   const cardTitle = loading ? "Loading…" : live ? `Live · ${cfg.name}` : detail.title;
   const historyHref = `/sessions?agent=${agentId}`;
   const showSessionRail = agentId === "hermes" || agentId === "obsidian";
+  const showHermesRows = agentId === "hermes" && !expanded;
+  const showRightRail = !expanded && !showHermesRows;
   const mainColumnClass =
-    expanded
+    showHermesRows ? "xl:col-span-9"
+    : expanded
       ? showSessionRail ? "xl:col-span-9" : "xl:col-span-12"
       : showSessionRail ? "xl:col-span-6" : "xl:col-span-9";
 
@@ -384,14 +387,22 @@ export function SessionWorkspace({
         </Card>
       </div>
 
-      {!expanded && (
+      {showRightRail && (
         <div className="space-y-6 xl:col-span-3">
           {(agentId === "claude-code" || agentId === "codex") && <TerminalAgentAside s={detail} />}
-          {agentId === "hermes" && hermesCrew && (
-            <HermesMissionControl dashboard={hermesCrew} framed onOpenSession={resumeInChat} />
-          )}
-          {agentId === "hermes" && <HermesAside memory={memory} jobs={jobs} s={detail} hermesInfo={hermesInfo} />}
           {agentId === "obsidian" && <ObsidianAside notes={notes} vaultStats={vaultStats} />}
+        </div>
+      )}
+
+      {showHermesRows && hermesCrew && (
+        <div className="xl:col-span-12">
+          <HermesMissionControl dashboard={hermesCrew} framed onOpenSession={resumeInChat} />
+        </div>
+      )}
+
+      {showHermesRows && (
+        <div className="xl:col-span-12">
+          <HermesAside memory={memory} jobs={jobs} s={detail} hermesInfo={hermesInfo} layout="grid" />
         </div>
       )}
     </>
